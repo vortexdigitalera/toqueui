@@ -28,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Network', href: '/network-panel', icon: 'SignalIcon', group: 'Monitoring', panel: 'network' },
   { label: 'Benchmarking', href: '/benchmarking-panel', icon: 'ChartBarIcon', group: 'Monitoring', panel: 'benchmarking' },
   { label: 'API Builder', href: '/api-builder', icon: 'CodeBracketIcon', group: 'Developer', panel: 'api-builder' },
+  { label: 'Team', href: '/team-management', icon: 'UsersIcon', group: 'Admin', panel: 'team-management' },
   { label: 'Login', href: '/login', icon: 'ArrowRightOnRectangleIcon', group: 'Access' },
 ];
 

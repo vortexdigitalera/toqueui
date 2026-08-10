@@ -3,7 +3,7 @@
 export type UserRole = 'admin' | 'operator' | 'viewer';
 
 export type Panel =
-  | 'send-visa' |'schedule' |'captcha' |'benchmarking' |'pulling' |'network' |'api-builder' |'dashboard';
+  | 'send-visa' |'schedule' |'captcha' |'benchmarking' |'pulling' |'network' |'api-builder' |'dashboard' |'team-management';
 
 // Panel access matrix: which roles can access each panel
 export const PANEL_PERMISSIONS: Record<Panel, UserRole[]> = {
@@ -16,6 +16,8 @@ export const PANEL_PERMISSIONS: Record<Panel, UserRole[]> = {
   schedule: ['admin', 'operator'],
   captcha: ['admin', 'operator'],
   benchmarking: ['admin'],
+  // Admin-only
+  'team-management': ['admin'],
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
