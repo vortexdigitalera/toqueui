@@ -23,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Network', href: '/network-panel', icon: 'SignalIcon', group: 'Monitoring' },
   { label: 'Benchmarking', href: '/benchmarking-panel', icon: 'ChartBarIcon', group: 'Monitoring' },
   { label: 'API Builder', href: '/api-builder', icon: 'CodeBracketIcon', group: 'Developer' },
+  { label: 'Login', href: '/login', icon: 'ArrowRightOnRectangleIcon', group: 'Access' },
 ];
 
 const BADGE_COLORS: Record<string, string> = {
