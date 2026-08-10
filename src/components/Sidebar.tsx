@@ -15,7 +15,8 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Authentication', href: '/', icon: 'KeyIcon', group: 'Operations' },
+  { label: 'Home', href: '/', icon: 'HomeIcon', group: 'Navigation' },
+  { label: 'Authentication', href: '/dashboard', icon: 'KeyIcon', group: 'Operations' },
   { label: 'Send Visa', href: '/send-visa-panel', icon: 'PaperAirplaneIcon', group: 'Operations' },
   { label: 'Schedule', href: '/schedule-panel', icon: 'ClockIcon', badge: 2, badgeVariant: 'primary', group: 'Operations' },
   { label: 'Pulling', href: '/pulling-panel', icon: 'ArrowDownTrayIcon', group: 'Operations' },

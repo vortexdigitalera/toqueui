@@ -76,7 +76,7 @@ export default function LoginPage() {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
       setSuccessMsg('Authenticated — redirecting…');
-      setTimeout(() => router.push('/'), 800);
+      setTimeout(() => router.push('/dashboard'), 800);
     } catch (err: any) {
       setError(err?.message || 'Authentication failed. Check your credentials.');
     } finally {
@@ -142,7 +142,7 @@ export default function LoginPage() {
       // then verify with supabase edge function / backend
       await new Promise(r => setTimeout(r, 1400));
       setSuccessMsg('Passkey verified — redirecting…');
-      setTimeout(() => router.push('/'), 800);
+      setTimeout(() => router.push('/dashboard'), 800);
     } catch (err: any) {
       setError(err?.message || 'Passkey authentication failed.');
     } finally {
@@ -606,7 +606,7 @@ export default function LoginPage() {
             className="text-xs transition-colors"
             style={{ color: 'var(--muted-foreground)' }}
           >
-            ← Back to command center
+            ← Back to home
           </button>
         </div>
       </div>
