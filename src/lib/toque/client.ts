@@ -61,6 +61,20 @@ function buildHeaders(config: ToqueConfig): Record<string, string> {
   return h;
 }
 
+/**
+ * Build the proxy URL for a given API path.
+ * All requests go through /api/toque/<path> (Next.js server-side proxy)
+ * to avoid CORS and network issues when fetching from the browser.
+ * The real backend base URL is forwarded as ?_target=<baseUrl>.
+ */
+function buildProxyUrl(config: ToqueConfig, path: string): string {
+  // Strip leading slash from path for the proxy route
+  const cleanPath = path.replace(/^\//, '');
+  const proxyBase = '/api/toque';
+  const targetParam = encodeURIComponent(config.baseUrl.replace(/\/$/, ''));
+  return `${proxyBase}/${cleanPath}?_target=${targetParam}`;
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -68,7 +82,7 @@ async function request<T>(
   cliCommand?: string
 ): Promise<ToqueResponse<T>> {
   const config = getConfig();
-  const url = `${config.baseUrl.replace(/\/$/, '')}${path}`;
+  const url = buildProxyUrl(config, path);
   const start = Date.now();
   const cmd = cliCommand || `toque ${path.replace(/\//g, ' ').trim()}`;
 
