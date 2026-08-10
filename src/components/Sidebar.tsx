@@ -138,10 +138,10 @@ export default function Sidebar({ collapsed, onToggle, activeRoute }: SidebarPro
       {!collapsed && userRole && (
         <div className="px-3 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
           <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${ROLE_COLORS[userRole]}`}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${ROLE_COLORS[userRole] ?? 'text-purple-400 bg-purple-400/10 border-purple-400/20'}`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
-            {ROLE_LABELS[userRole]}
+            {ROLE_LABELS[userRole] ?? userRole}
           </span>
         </div>
       )}
