@@ -3,22 +3,12 @@
 -- ============================================================
 
 -- 1. Add 'super_admin' value to the existing user_role enum
--- PostgreSQL does not support DROP/RECREATE of enum in use without CASCADE,
--- so we use ALTER TYPE ... ADD VALUE (idempotent-safe with IF NOT EXISTS)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_enum
-    WHERE enumlabel = 'super_admin'
-      AND enumtypid = (
-        SELECT oid FROM pg_type WHERE typname = 'user_role' AND typnamespace = (
-          SELECT oid FROM pg_namespace WHERE nspname = 'public'
-        )
-      )
-  ) THEN
-    ALTER TYPE public.user_role ADD VALUE 'super_admin';
-  END IF;
-END $$;
+-- NOTE: ALTER TYPE ... ADD VALUE cannot be used in a transaction block
+-- that also references the new value. We add it first, then commit,
+-- then use it in subsequent statements.
+ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'super_admin';
+
+-- COMMIT is implicit here; the enum value is now visible to subsequent statements.
 
 -- 2. Update helper function to also recognise super_admin as admin-equivalent
 CREATE OR REPLACE FUNCTION public.is_admin()
