@@ -1,8 +1,8 @@
-
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import type { UserRole } from '@/lib/rbac';
 
 const AuthContext = createContext<any>({});
 
@@ -18,13 +18,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<any>(null);
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
   const supabase = createClient();
+
+  const fetchUserRole = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+      if (!error && data?.role) {
+        setUserRole(data.role as UserRole);
+      } else {
+        setUserRole('viewer');
+      }
+    } catch {
+      setUserRole('viewer');
+    }
+  };
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserRole(session.user.id);
+      }
       setLoading(false);
     });
 
@@ -34,6 +55,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserRole(session.user.id);
+      } else {
+        setUserRole(null);
+      }
       setLoading(false);
     });
 
@@ -98,16 +124,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return data;
   };
 
+  // Log an audit event
+  const logAudit = async (action: string, panel?: string, details?: Record<string, any>) => {
+    if (!user) return;
+    try {
+      await supabase.from('audit_logs').insert({
+        user_id: user.id,
+        user_email: user.email,
+        action,
+        panel: panel ?? null,
+        details: details ?? {},
+      });
+    } catch {
+      // Silently fail — audit logging should not break the app
+    }
+  };
+
   const value = {
     user,
     session,
     loading,
+    userRole,
     signUp,
     signIn,
     signOut,
     getCurrentUser,
     isEmailVerified,
-    getUserProfile
+    getUserProfile,
+    logAudit,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
