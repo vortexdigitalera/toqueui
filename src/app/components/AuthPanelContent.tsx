@@ -195,7 +195,7 @@ export default function AuthPanelContent() {
         <div>
           <h1 className="text-3xl font-semibold" style={{ color: 'var(--foreground)' }}>Authentication</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--muted-foreground)' }}>
-            Configure connection to your Toque/Nusuk Cloudflare Worker — wired to <span className="font-mono text-xs" style={{ color: 'var(--accent)' }}>GET /health · POST /auth/ping · POST /auth/refresh</span>
+            Configure connection to your Toque/Nusuk Cloudflare Worker — wired to <span className="font-mono text-xs" style={{ color: 'var(--accent)' }}>GET /health · POST /ping · POST /refresh</span>
           </p>
         </div>
         <div className="flex items-center gap-2">

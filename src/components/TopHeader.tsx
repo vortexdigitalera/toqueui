@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Icon from './ui/AppIcon';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuditMetrics } from '@/hooks/useAuditMetrics';
 
 interface TopHeaderProps {
   sidebarCollapsed: boolean;
@@ -13,6 +14,7 @@ export default function TopHeader({ sidebarCollapsed: _ }: TopHeaderProps) {
   const [baseUrl, setBaseUrl] = useState('https://toque.vortex.name.ng');
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('disconnected');
   const [lastChecked, setLastChecked] = useState('');
+  const metrics = useAuditMetrics();
 
   useEffect(() => {
     const stored = localStorage.getItem('toque_base_url');
@@ -30,9 +32,18 @@ export default function TopHeader({ sidebarCollapsed: _ }: TopHeaderProps) {
 
   const status = statusConfig[connectionStatus];
 
+  const successRateColor =
+    metrics.successRate === null
+      ? 'var(--muted-foreground)'
+      : metrics.successRate >= 90
+      ? 'var(--success)'
+      : metrics.successRate >= 70
+      ? 'var(--warning)'
+      : 'var(--destructive)';
+
   return (
     <header
-      className="flex items-center justify-between h-14 px-6 shrink-0"
+      className="flex items-center justify-between h-14 px-6 shrink-0 gap-4"
       style={{ backgroundColor: 'var(--card)', borderBottom: '1px solid var(--border)' }}
     >
       {/* Left: base URL */}
@@ -44,6 +55,55 @@ export default function TopHeader({ sidebarCollapsed: _ }: TopHeaderProps) {
           <Icon name="GlobeAltIcon" size={13} />
           <span className="truncate max-w-[220px]" style={{ color: 'var(--foreground)' }}>
             {baseUrl}
+          </span>
+        </div>
+      </div>
+
+      {/* Center: real-time audit metrics */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        {/* Success Rate */}
+        <div
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono"
+          style={{ backgroundColor: 'var(--muted)', border: '1px solid var(--border)' }}
+          title="Success rate (last 5 min)"
+        >
+          <Icon name="CheckCircleIcon" size={12} style={{ color: successRateColor }} />
+          <span style={{ color: 'var(--muted-foreground)' }}>SR</span>
+          <span className="font-semibold" style={{ color: successRateColor }}>
+            {metrics.isLoading ? '—' : metrics.successRate === null ? 'N/A' : `${metrics.successRate}%`}
+          </span>
+        </div>
+
+        {/* Error Count */}
+        <div
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono"
+          style={{ backgroundColor: 'var(--muted)', border: '1px solid var(--border)' }}
+          title="Error count (last 5 min)"
+        >
+          <Icon
+            name="ExclamationCircleIcon"
+            size={12}
+            style={{ color: metrics.errorCount > 0 ? 'var(--destructive)' : 'var(--muted-foreground)' }}
+          />
+          <span style={{ color: 'var(--muted-foreground)' }}>ERR</span>
+          <span
+            className="font-semibold"
+            style={{ color: metrics.errorCount > 0 ? 'var(--destructive)' : 'var(--foreground)' }}
+          >
+            {metrics.isLoading ? '—' : metrics.errorCount}
+          </span>
+        </div>
+
+        {/* Throughput */}
+        <div
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono"
+          style={{ backgroundColor: 'var(--muted)', border: '1px solid var(--border)' }}
+          title="Sends per minute (last 60s)"
+        >
+          <Icon name="BoltIcon" size={12} style={{ color: 'var(--muted-foreground)' }} />
+          <span style={{ color: 'var(--muted-foreground)' }}>TPM</span>
+          <span className="font-semibold" style={{ color: 'var(--foreground)' }}>
+            {metrics.isLoading ? '—' : metrics.throughput}
           </span>
         </div>
       </div>

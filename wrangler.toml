@@ -1,26 +1,77 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Toque UI — Cloudflare Pages / Workers Production Config
+# Deploy: npx wrangler pages deploy .vercel/output/static --project-name toqueui
+# ═══════════════════════════════════════════════════════════════════════════════
+
 name = "toqueui"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# ── Cloudflare Pages (Next.js via @cloudflare/next-on-pages) ──────────────────
-# Build command: npx @cloudflare/next-on-pages
-# Output directory: .vercel/output/static
+# ── Pages project (Next.js via @cloudflare/next-on-pages) ────────────────────
+pages_build_output_dir = ".vercel/output/static"
 
 [build]
 command = "npx @cloudflare/next-on-pages"
 
-[build.upload]
-format = "modules"
-
-# ── Environment variables (set secrets via: wrangler secret put VAR_NAME) ─────
+# ── Public environment variables (safe to commit) ────────────────────────────
 [vars]
-NEXT_PUBLIC_SITE_URL = "https://toqueui8784.builtwithrocket.new"
+NEXT_PUBLIC_SITE_URL        = "https://toqueui8784.builtwithrocket.new"
+NODE_ENV                    = "production"
 
-# ── Durable Objects / KV (optional, for session caching) ─────────────────────
-# Uncomment if you add KV namespace for edge session caching:
+# Supabase — public keys (non-secret, required at build & runtime)
+# Set real values via: wrangler pages secret put NEXT_PUBLIC_SUPABASE_URL
+# NEXT_PUBLIC_SUPABASE_URL    = "https://<project>.supabase.co"
+# NEXT_PUBLIC_SUPABASE_ANON_KEY = "<anon-key>"
+
+# Analytics / Ads (non-secret)
+# NEXT_PUBLIC_GA_MEASUREMENT_ID = "G-XXXXXXXXXX"
+# NEXT_PUBLIC_ADSENSE_ID        = "ca-pub-XXXXXXXXXX"
+
+# Stripe publishable key (non-secret)
+# NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_live_XXXXXXXXXX"
+
+# ── Secret environment variables ─────────────────────────────────────────────
+# NEVER commit real values here. Set each secret with:
+#   wrangler pages secret put <VAR_NAME> --project-name toqueui
+#
+# Required secrets for production:
+#   NEXT_PUBLIC_SUPABASE_URL          — Supabase project URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY     — Supabase anon/public key
+#   OPENAI_API_KEY                    — OpenAI API key
+#   GEMINI_API_KEY                    — Google Gemini API key
+#   ANTHROPIC_API_KEY                 — Anthropic Claude API key
+#   PERPLEXITY_API_KEY                — Perplexity API key
+#   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY — Stripe publishable key
+#   NEXT_PUBLIC_GA_MEASUREMENT_ID     — Google Analytics measurement ID
+#   NEXT_PUBLIC_ADSENSE_ID            — Google AdSense publisher ID
+
+# ── Production environment overrides ─────────────────────────────────────────
+[env.production]
+name = "toqueui"
+
+[env.production.vars]
+NEXT_PUBLIC_SITE_URL = "https://toqueui8784.builtwithrocket.new"
+NODE_ENV             = "production"
+
+# ── Preview / staging environment ────────────────────────────────────────────
+[env.preview]
+name = "toqueui-preview"
+
+[env.preview.vars]
+NEXT_PUBLIC_SITE_URL = "https://toqueui8784.builtwithrocket.new"
+NODE_ENV             = "preview"
+
+# ── KV Namespace (optional — uncomment to enable edge session / rate-limit cache)
 # [[kv_namespaces]]
 # binding = "TOQUE_CACHE"
-# id = "YOUR_KV_NAMESPACE_ID"
+# id      = "YOUR_KV_NAMESPACE_ID_HERE"
 
-# ── Edge Proxy Worker for Nusuk API ──────────────────────────────────────────
-# Deploy separately: wrangler deploy --config wrangler.proxy.toml
+# ── Durable Objects (optional — uncomment for stateful edge workers)
+# [[durable_objects.bindings]]
+# name       = "TOQUE_SESSION"
+# class_name = "ToqueSession"
+
+# ── Edge Proxy Worker ─────────────────────────────────────────────────────────
+# The Nusuk API proxy is a separate Worker — deploy with:
+#   wrangler deploy --config wrangler.proxy.toml
+# See wrangler.proxy.toml for its config.

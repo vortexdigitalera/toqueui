@@ -3,8 +3,8 @@
  * Maps directly to the toque Node.js bin/CLI HTTP endpoints.
  *
  * CLI → HTTP mapping:
- *   toque auth ping          → POST /auth/ping
- *   toque auth refresh       → POST /auth/refresh
+ *   toque auth ping          → POST /ping
+ *   toque auth refresh       → POST /refresh
  *   toque pull <groupId>     → POST /pull  { groupId }
  *   toque send <groupId>     → POST /send  { groupId }
  *   toque schedule create    → POST /schedule/create { groupId, targetTime, pullBefore }
@@ -318,10 +318,10 @@ export interface AuthRefreshResponse {
 }
 
 export const toqueAuthPing = () =>
-  request<AuthPingResponse>('POST', '/auth/ping', { check: true }, 'toque auth ping');
+  request<AuthPingResponse>('POST', '/ping', { check: true }, 'toque auth ping');
 
 export const toqueAuthRefresh = () =>
-  request<AuthRefreshResponse>('POST', '/auth/refresh', {}, 'toque auth refresh');
+  request<AuthRefreshResponse>('POST', '/refresh', {}, 'toque auth refresh');
 
 // ─── Groups ───────────────────────────────────────────────────────────────────
 
