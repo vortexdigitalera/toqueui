@@ -35,7 +35,31 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${jetbrainsMono.variable} dark`}>
+    <html lang="en" className={`${dmSans.variable} ${jetbrainsMono.variable} dark`} suppressHydrationWarning>
+      <head>
+        {/* Inline script to apply saved theme before first paint — prevents flash */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var t = localStorage.getItem('toque_theme');
+                  var root = document.documentElement;
+                  if (t === 'light') {
+                    root.classList.remove('dark');
+                    root.classList.add('light');
+                  } else {
+                    root.classList.remove('light');
+                    root.classList.add('dark');
+                  }
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
+      
+      <script type="module" async src="https://static.rocket.new/rocket-web.js?_cfg=https%3A%2F%2Ftoqueui8784back.builtwithrocket.new&_be=https%3A%2F%2Fappanalytics.rocket.new&_v=0.1.20" />
+      <script type="module" defer src="https://static.rocket.new/rocket-shot.js?v=0.0.2" /></head>
       <body className={dmSans.className}>
         {children}
         <Toaster
@@ -51,9 +75,7 @@ export default function RootLayout({
             },
           }}
         />
-
-        <script type="module" async src="https://static.rocket.new/rocket-web.js?_cfg=https%3A%2F%2Ftoqueui8784back.builtwithrocket.new&_be=https%3A%2F%2Fappanalytics.rocket.new&_v=0.1.20" />
-        <script type="module" defer src="https://static.rocket.new/rocket-shot.js?v=0.0.2" /></body>
+      </body>
     </html>
   );
 }

@@ -42,15 +42,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Email/Password Sign Up
   const signUp = async (email: string, password: string, metadata = {}) => {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          full_name: metadata?.fullName || '',
-          avatar_url: metadata?.avatarUrl || ''
+          full_name: (metadata as any)?.fullName || '',
+          avatar_url: (metadata as any)?.avatarUrl || ''
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        emailRedirectTo: `${siteUrl}/auth/callback`
       }
     });
     if (error) throw error;
