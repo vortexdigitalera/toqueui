@@ -20,6 +20,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Home', href: '/', icon: 'HomeIcon', group: 'Navigation' },
+  { label: 'Overview', href: '/overview', icon: 'Squares2X2Icon', group: 'Navigation' },
   { label: 'Authentication', href: '/dashboard', icon: 'KeyIcon', group: 'Operations', panel: 'dashboard' },
   { label: 'Send Visa', href: '/send-visa-panel', icon: 'PaperAirplaneIcon', group: 'Operations', panel: 'send-visa' },
   { label: 'Schedule', href: '/schedule-panel', icon: 'ClockIcon', badge: 2, badgeVariant: 'primary', group: 'Operations', panel: 'schedule' },
