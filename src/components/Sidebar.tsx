@@ -184,7 +184,7 @@ export default function Sidebar({ collapsed, onToggle, activeRoute }: SidebarPro
                 {groupItems.map(item => {
                   const isActive = activeRoute === item.href;
                   const hasPanel = !!item.panel;
-                  const allowed = hasPanel ? canAccessPanel(userRole, item.panel as Panel) : true;
+                  const allowed = hasPanel && userRole !== null ? canAccessPanel(userRole, item.panel as Panel) : true;
                   return (
                     <li key={`nav-${item.href}`}>
                       <Link
