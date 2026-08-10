@@ -2,8 +2,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Icon from '@/components/ui/AppIcon';
-
-
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { toqueRawRequest } from '@/lib/toque/client';
+import { toast } from 'sonner';
 
 interface ChatMessage {
   id: string;
@@ -11,79 +12,127 @@ interface ChatMessage {
   content: string;
   timestamp: string;
   latencyMs?: number;
+  httpStatus?: number;
 }
 
 interface MetricPoint {
   label: string;
-  value: number;
+  value: number | string;
   unit: string;
   trend: 'up' | 'down' | 'stable';
   color: string;
 }
 
+const QUICK_COMMANDS = [
+  { label: 'Health', cmd: 'GET /health' },
+  { label: 'Groups', cmd: 'GET /groups/list' },
+  { label: 'Schedule', cmd: 'GET /schedule/get' },
+  { label: 'Auth Ping', cmd: 'POST /auth/ping' },
+  { label: 'CAPTCHA Status', cmd: 'GET /captcha/status' },
+  { label: 'Bench Results', cmd: 'GET /bench/results' },
+];
+
 const INITIAL_MESSAGES: ChatMessage[] = [
-  { id: 'm1', role: 'system', content: 'Connected to toque.vortex.name.ng — WebSocket channel open', timestamp: '07:00:01', latencyMs: 12 },
-  { id: 'm2', role: 'user', content: 'GET /health', timestamp: '07:00:05' },
-  { id: 'm3', role: 'system', content: '{"status":"ok","uptime":3600,"workers":4,"queue":0}', timestamp: '07:00:05', latencyMs: 38 },
-  { id: 'm4', role: 'user', content: 'GET /groups/list', timestamp: '07:01:12' },
-  { id: 'm5', role: 'system', content: '{"groups":[{"id":"GRP-001","name":"Hajj Group Alpha 2026","count":8},{"id":"GRP-002","name":"Umrah Package Delta","count":12}]}', timestamp: '07:01:12', latencyMs: 94 },
+  { id: 'm0', role: 'system', content: '# Toque API Terminal — type a command like "GET /health" or "POST /auth/ping"', timestamp: '--:--:--' },
 ];
-
-const METRICS: MetricPoint[] = [
-  { label: 'Avg Latency', value: 94, unit: 'ms', trend: 'down', color: 'var(--success)' },
-  { label: 'Req/min', value: 42, unit: 'rpm', trend: 'up', color: 'var(--accent)' },
-  { label: 'Error Rate', value: 0.8, unit: '%', trend: 'stable', color: 'var(--warning)' },
-  { label: 'Active Workers', value: 4, unit: '', trend: 'stable', color: 'var(--primary)' },
-  { label: 'Queue Depth', value: 0, unit: '', trend: 'down', color: 'var(--success)' },
-  { label: 'Uptime', value: 99.97, unit: '%', trend: 'stable', color: 'var(--success)' },
-];
-
-const LATENCY_BARS = [38, 94, 52, 120, 67, 44, 88, 210, 55, 72, 38, 49, 63, 91, 44];
 
 export default function NetworkPanelContent() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected'>('connected');
+  const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected'>('disconnected');
+  const [latencyHistory, setLatencyHistory] = useState<number[]>([]);
+  const [metrics, setMetrics] = useState<MetricPoint[]>([
+    { label: 'Avg Latency', value: '—', unit: 'ms', trend: 'stable', color: 'var(--muted-foreground)' },
+    { label: 'Requests', value: 0, unit: '', trend: 'stable', color: 'var(--accent)' },
+    { label: 'Errors', value: 0, unit: '', trend: 'stable', color: 'var(--muted-foreground)' },
+    { label: 'Success Rate', value: '—', unit: '%', trend: 'stable', color: 'var(--muted-foreground)' },
+    { label: 'Min Latency', value: '—', unit: 'ms', trend: 'stable', color: 'var(--muted-foreground)' },
+    { label: 'Max Latency', value: '—', unit: 'ms', trend: 'stable', color: 'var(--muted-foreground)' },
+  ]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const requestCount = useRef(0);
+  const errorCount = useRef(0);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isSending) return;
+  const updateMetrics = (latency: number, success: boolean) => {
+    requestCount.current += 1;
+    if (!success) errorCount.current += 1;
+
+    setLatencyHistory(prev => {
+      const next = [...prev, latency].slice(-15);
+      const avg = Math.round(next.reduce((a, b) => a + b, 0) / next.length);
+      const min = Math.min(...next);
+      const max = Math.max(...next);
+      const successRate = Math.round(((requestCount.current - errorCount.current) / requestCount.current) * 100);
+
+      setMetrics([
+        { label: 'Avg Latency', value: avg, unit: 'ms', trend: avg < 100 ? 'down' : 'up', color: avg < 100 ? 'var(--success)' : avg < 300 ? 'var(--warning)' : 'var(--error)' },
+        { label: 'Requests', value: requestCount.current, unit: '', trend: 'up', color: 'var(--accent)' },
+        { label: 'Errors', value: errorCount.current, unit: '', trend: errorCount.current > 0 ? 'up' : 'stable', color: errorCount.current > 0 ? 'var(--error)' : 'var(--muted-foreground)' },
+        { label: 'Success Rate', value: successRate, unit: '%', trend: successRate > 95 ? 'up' : 'down', color: successRate > 95 ? 'var(--success)' : successRate > 80 ? 'var(--warning)' : 'var(--error)' },
+        { label: 'Min Latency', value: min, unit: 'ms', trend: 'stable', color: 'var(--success)' },
+        { label: 'Max Latency', value: max, unit: 'ms', trend: 'stable', color: max > 500 ? 'var(--error)' : 'var(--warning)' },
+      ]);
+      return next;
+    });
+  };
+
+  const handleSend = async (rawInput?: string) => {
+    const cmd = (rawInput ?? input).trim();
+    if (!cmd || isSending) return;
+
     const userMsg: ChatMessage = {
       id: `m${Date.now()}`,
       role: 'user',
-      content: input.trim(),
+      content: cmd,
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
     };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsSending(true);
+    setWsStatus('connected');
 
-    await new Promise(r => setTimeout(r, 400 + Math.random() * 600));
-    const latency = Math.floor(30 + Math.random() * 200);
-    const responses: Record<string, string> = {
-      'GET /health': '{"status":"ok","uptime":3720,"workers":4,"queue":0}',
-      'GET /groups/list': '{"groups":[{"id":"GRP-001","name":"Hajj Group Alpha 2026","count":8}]}',
-      'GET /schedule/get': '{"workflows":6,"pending":2,"running":1,"success":3}',
-      'POST /auth/ping': '{"authenticated":true,"token_valid":true,"expires_in":3600}',
-    };
-    const reply = responses[userMsg.content] ?? `{"error":"unknown_command","hint":"Try GET /health, GET /groups/list, GET /schedule/get"}`;
+    // Parse "METHOD /path [body]"
+    const parts = cmd.split(/\s+/);
+    const method = parts[0].toUpperCase();
+    const path = parts[1] || '/health';
+    let body: unknown;
+    if (parts.length > 2) {
+      try { body = JSON.parse(parts.slice(2).join(' ')); } catch { body = undefined; }
+    }
+
+    const result = await toqueRawRequest(method, path, body);
+    const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+    const content = result.ok
+      ? JSON.stringify(result.data, null, 2)
+      : `Error ${result.status || 'ERR'}: ${result.error}`;
+
     const sysMsg: ChatMessage = {
       id: `m${Date.now() + 1}`,
-      role: reply.includes('"error"') ? 'error' : 'system',
-      content: reply,
-      timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-      latencyMs: latency,
+      role: result.ok ? 'system' : 'error',
+      content,
+      timestamp: ts,
+      latencyMs: result.latencyMs,
+      httpStatus: result.status,
     };
     setMessages(prev => [...prev, sysMsg]);
+    updateMetrics(result.latencyMs, result.ok);
+
+    if (result.ok) {
+      toast.success(`${method} ${path} → ${result.status} (${result.latencyMs}ms)`);
+    } else {
+      toast.error(`${method} ${path} → ${result.status || 'ERR'}: ${result.error}`);
+    }
+
     setIsSending(false);
   };
 
-  const maxBar = Math.max(...LATENCY_BARS);
+  const maxBar = latencyHistory.length > 0 ? Math.max(...latencyHistory, 1) : 1;
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -91,20 +140,20 @@ export default function NetworkPanelContent() {
         <div>
           <h1 className="text-3xl font-semibold" style={{ color: 'var(--foreground)' }}>Network</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--muted-foreground)' }}>
-            Live API chat terminal and real-time performance metrics
+            Live API terminal — wired to <span className="font-mono text-xs" style={{ color: 'var(--accent)' }}>toque.vortex.name.ng</span> via real HTTP
           </p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: wsStatus === 'connected' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${wsStatus === 'connected' ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}` }}>
           <span className="w-2 h-2 rounded-full pulse-dot" style={{ backgroundColor: wsStatus === 'connected' ? 'var(--success)' : 'var(--error)' }} />
           <span className="text-xs font-semibold" style={{ color: wsStatus === 'connected' ? 'var(--success)' : 'var(--error)' }}>
-            WS {wsStatus === 'connected' ? 'Connected' : 'Disconnected'}
+            {wsStatus === 'connected' ? 'Active' : 'Idle'}
           </span>
         </div>
       </div>
 
       {/* Metrics grid */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-        {METRICS.map(m => (
+        {metrics.map(m => (
           <div key={m.label} className="card-surface p-3 flex flex-col gap-1">
             <span className="text-2xs uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>{m.label}</span>
             <div className="flex items-end gap-1">
@@ -116,6 +165,23 @@ export default function NetworkPanelContent() {
               <span className="text-2xs" style={{ color: 'var(--muted-foreground)' }}>{m.trend}</span>
             </div>
           </div>
+        ))}
+      </div>
+
+      {/* Quick commands */}
+      <div className="flex gap-2 flex-wrap">
+        {QUICK_COMMANDS.map(qc => (
+          <button
+            key={qc.cmd}
+            onClick={() => handleSend(qc.cmd)}
+            disabled={isSending}
+            className="px-3 py-1.5 rounded text-xs font-mono font-medium transition-all"
+            style={{ backgroundColor: 'var(--input)', color: 'var(--accent)', border: '1px solid var(--border)' }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+          >
+            {qc.label}
+          </button>
         ))}
       </div>
 
@@ -140,21 +206,28 @@ export default function NetworkPanelContent() {
                 <span style={{ color: msg.role === 'user' ? 'var(--accent)' : msg.role === 'error' ? 'var(--error)' : 'var(--success)', minWidth: '14px' }}>
                   {msg.role === 'user' ? '›' : msg.role === 'error' ? '✗' : '‹'}
                 </span>
-                <span className="flex-1 break-all" style={{ color: msg.role === 'user' ? 'var(--foreground)' : msg.role === 'error' ? 'var(--error)' : '#86efac' }}>
+                <span className="flex-1 break-all whitespace-pre-wrap" style={{ color: msg.role === 'user' ? 'var(--foreground)' : msg.role === 'error' ? 'var(--error)' : '#86efac' }}>
                   {msg.content}
                 </span>
-                {msg.latencyMs !== undefined && (
-                  <span style={{ color: msg.latencyMs > 150 ? 'var(--warning)' : 'var(--muted-foreground)', minWidth: '48px', textAlign: 'right' }}>
-                    {msg.latencyMs}ms
-                  </span>
-                )}
+                <div className="flex flex-col items-end gap-0.5 shrink-0">
+                  {msg.httpStatus !== undefined && msg.httpStatus > 0 && (
+                    <span style={{ color: msg.httpStatus < 300 ? 'var(--success)' : 'var(--error)', minWidth: '36px', textAlign: 'right' }}>
+                      {msg.httpStatus}
+                    </span>
+                  )}
+                  {msg.latencyMs !== undefined && (
+                    <span style={{ color: msg.latencyMs > 150 ? 'var(--warning)' : 'var(--muted-foreground)', minWidth: '48px', textAlign: 'right' }}>
+                      {msg.latencyMs}ms
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
             {isSending && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <span style={{ color: 'var(--muted-foreground)', minWidth: '56px' }}>--:--:--</span>
-                <span style={{ color: 'var(--muted-foreground)' }}>‹</span>
-                <span style={{ color: 'var(--muted-foreground)' }}>processing...</span>
+                <LoadingSpinner size={10} />
+                <span style={{ color: 'var(--muted-foreground)' }}>fetching...</span>
               </div>
             )}
             <div ref={bottomRef} />
@@ -164,17 +237,13 @@ export default function NetworkPanelContent() {
             <input
               className="flex-1 bg-transparent font-mono text-xs outline-none"
               style={{ color: 'var(--foreground)' }}
-              placeholder="GET /health, POST /auth/ping..."
+              placeholder="GET /health  |  POST /auth/ping  |  GET /groups/list"
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
               disabled={isSending}
             />
-            <button
-              onClick={handleSend}
-              disabled={isSending || !input.trim()}
-              className="btn-primary px-3 py-1.5 text-xs"
-            >
+            <button onClick={() => handleSend()} disabled={isSending || !input.trim()} className="btn-primary px-3 py-1.5 text-xs">
               Send
             </button>
           </div>
@@ -184,29 +253,36 @@ export default function NetworkPanelContent() {
         <div className="lg:col-span-2 card-surface flex flex-col" style={{ height: '420px' }}>
           <div className="px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
             <span className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>Latency History</span>
-            <p className="text-2xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>Last 15 requests (ms)</p>
+            <p className="text-2xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>Last {latencyHistory.length} requests (ms)</p>
           </div>
           <div className="flex-1 p-4 flex flex-col justify-end gap-1">
-            <div className="flex items-end gap-1.5 h-48">
-              {LATENCY_BARS.map((val, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <div
-                    className="w-full rounded-t transition-all"
-                    style={{
-                      height: `${(val / maxBar) * 100}%`,
-                      backgroundColor: val > 150 ? 'var(--error)' : val > 80 ? 'var(--warning)' : 'var(--success)',
-                      opacity: 0.8,
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
+            {latencyHistory.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                Send requests to see latency chart
+              </div>
+            ) : (
+              <div className="flex items-end gap-1.5 h-48">
+                {latencyHistory.map((val, i) => (
+                  <div key={`bar-${i}`} className="flex-1 flex flex-col items-center gap-1">
+                    <div
+                      className="w-full rounded-t transition-all"
+                      style={{
+                        height: `${(val / maxBar) * 100}%`,
+                        backgroundColor: val > 300 ? 'var(--error)' : val > 100 ? 'var(--warning)' : 'var(--success)',
+                        opacity: 0.8,
+                        minHeight: '4px',
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex justify-between mt-2">
               <span className="text-2xs font-mono" style={{ color: 'var(--muted-foreground)' }}>oldest</span>
               <span className="text-2xs font-mono" style={{ color: 'var(--muted-foreground)' }}>latest</span>
             </div>
             <div className="flex gap-4 mt-3">
-              {[{ label: '< 80ms', color: 'var(--success)' }, { label: '80–150ms', color: 'var(--warning)' }, { label: '> 150ms', color: 'var(--error)' }].map(l => (
+              {[{ label: '< 100ms', color: 'var(--success)' }, { label: '100–300ms', color: 'var(--warning)' }, { label: '> 300ms', color: 'var(--error)' }].map(l => (
                 <div key={l.label} className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: l.color }} />
                   <span className="text-2xs" style={{ color: 'var(--muted-foreground)' }}>{l.label}</span>

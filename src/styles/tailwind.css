@@ -2,6 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Dark theme (default) ─────────────────────────────────────────────────── */
+:root,
+.dark {
+  --background: #0a0a0f;
+  --foreground: #e2e8f0;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #1e1e2e;
+  --secondary-foreground: #e2e8f0;
+  --accent: #818cf8;
+  --accent-foreground: #0a0a0f;
+  --muted: #1e1e2e;
+  --muted-foreground: #64748b;
+  --card: #111118;
+  --card-foreground: #e2e8f0;
+  --border: #1e1e2e;
+  --input: #1a1a2e;
+  --ring: #6366f1;
+  --radius: 0.5rem;
+  --font-sans: var(--font-dm-sans), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', 'Fira Code', monospace;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --surface-hover: #16161f;
+  --indigo-glow: rgba(99, 102, 241, 0.15);
+}
+
+/* ── Light theme ──────────────────────────────────────────────────────────── */
 .light {
   --background: #f4f5f7;
   --foreground: #111118;
@@ -26,32 +55,6 @@
   --error: #dc2626;
   --surface-hover: #f0f1f5;
   --indigo-glow: rgba(99, 102, 241, 0.1);
-}
-
-:root {
-  --background: #0a0a0f;
-  --foreground: #e2e8f0;
-  --primary: #6366f1;
-  --primary-foreground: #ffffff;
-  --secondary: #1e1e2e;
-  --secondary-foreground: #e2e8f0;
-  --accent: #818cf8;
-  --accent-foreground: #0a0a0f;
-  --muted: #1e1e2e;
-  --muted-foreground: #64748b;
-  --card: #111118;
-  --card-foreground: #e2e8f0;
-  --border: #1e1e2e;
-  --input: #1a1a2e;
-  --ring: #6366f1;
-  --radius: 0.5rem;
-  --font-sans: var(--font-dm-sans), system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', 'Fira Code', monospace;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --error: #ef4444;
-  --surface-hover: #16161f;
-  --indigo-glow: rgba(99, 102, 241, 0.15);
 }
 
 @layer base {
@@ -417,4 +420,19 @@
   .timing-slow {
     color: var(--error);
   }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
 }

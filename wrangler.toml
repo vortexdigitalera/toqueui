@@ -1,0 +1,26 @@
+name = "toqueui"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# ── Cloudflare Pages (Next.js via @cloudflare/next-on-pages) ──────────────────
+# Build command: npx @cloudflare/next-on-pages
+# Output directory: .vercel/output/static
+
+[build]
+command = "npx @cloudflare/next-on-pages"
+
+[build.upload]
+format = "modules"
+
+# ── Environment variables (set secrets via: wrangler secret put VAR_NAME) ─────
+[vars]
+NEXT_PUBLIC_SITE_URL = "https://toqueui8784.builtwithrocket.new"
+
+# ── Durable Objects / KV (optional, for session caching) ─────────────────────
+# Uncomment if you add KV namespace for edge session caching:
+# [[kv_namespaces]]
+# binding = "TOQUE_CACHE"
+# id = "YOUR_KV_NAMESPACE_ID"
+
+# ── Edge Proxy Worker for Nusuk API ──────────────────────────────────────────
+# Deploy separately: wrangler deploy --config wrangler.proxy.toml

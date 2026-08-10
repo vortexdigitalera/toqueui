@@ -2,7 +2,9 @@
 
 import React, { useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
-
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { toqueBenchRun, toqueBenchResults } from '@/lib/toque/client';
+import { toast } from 'sonner';
 
 interface BenchmarkRun {
   id: string;
@@ -17,83 +19,132 @@ interface BenchmarkRun {
   p95Ms?: number;
   successRate?: number;
   startedAt?: string;
+  httpStatus?: number;
+  cliCommand?: string;
 }
 
-const INITIAL_RUNS: BenchmarkRun[] = [
-  {
-    id: 'bm-001', label: 'Auth Token Refresh', endpoint: 'POST /auth/refresh',
-    iterations: 100, concurrency: 5, status: 'done',
-    avgMs: 87, minMs: 42, maxMs: 312, p95Ms: 198, successRate: 99.0,
-    startedAt: '07:00:14',
-  },
-  {
-    id: 'bm-002', label: 'Group List Fetch', endpoint: 'GET /groups/list',
-    iterations: 200, concurrency: 10, status: 'done',
-    avgMs: 54, minMs: 28, maxMs: 189, p95Ms: 142, successRate: 100,
-    startedAt: '07:02:30',
-  },
-  {
-    id: 'bm-003', label: 'Visa Send Stress', endpoint: 'POST /send',
-    iterations: 50, concurrency: 3, status: 'error',
-    avgMs: 1240, minMs: 890, maxMs: 4200, p95Ms: 3800, successRate: 72.0,
-    startedAt: '07:05:00',
-  },
-];
-
 const ENDPOINTS = [
-  'GET /health', 'GET /groups/list', 'POST /auth/refresh',
-  'POST /send', 'GET /schedule/get', 'POST /schedule/create',
-  'POST /captcha/solve', 'GET /pull/status',
+  'GET /health',
+  'GET /groups/list',
+  'POST /auth/ping',
+  'POST /auth/refresh',
+  'POST /send',
+  'POST /pull',
+  'GET /schedule/get',
+  'POST /schedule/create',
+  'POST /captcha/solve',
+  'GET /captcha/status',
+  'POST /captcha/pull',
+  'GET /bench/results',
 ];
 
 export default function BenchmarkingPanelContent() {
-  const [runs, setRuns] = useState<BenchmarkRun[]>(INITIAL_RUNS);
+  const [runs, setRuns] = useState<BenchmarkRun[]>([]);
   const [endpoint, setEndpoint] = useState(ENDPOINTS[0]);
   const [iterations, setIterations] = useState(100);
   const [concurrency, setConcurrency] = useState(5);
   const [label, setLabel] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [cliLog, setCliLog] = useState<string[]>([]);
+
+  const appendLog = (line: string) =>
+    setCliLog(prev => [...prev.slice(-99), line]);
 
   const handleRun = async () => {
     if (isRunning) return;
     setIsRunning(true);
     setProgress(0);
 
+    const runLabel = label || endpoint;
+    const cliCmd = `toque bench run --endpoint "${endpoint}" --iter ${iterations} --concurrency ${concurrency}`;
     const newRun: BenchmarkRun = {
-      id: `bm-${String(runs.length + 1).padStart(3, '0')}`,
-      label: label || endpoint,
+      id: `bm-${Date.now()}`,
+      label: runLabel,
       endpoint,
       iterations,
       concurrency,
       status: 'running',
       startedAt: new Date().toLocaleTimeString('en-US', { hour12: false }),
+      cliCommand: cliCmd,
     };
     setRuns(prev => [newRun, ...prev]);
 
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise(r => setTimeout(r, 120));
-      setProgress(i);
+    appendLog(`$ ${cliCmd}`);
+    appendLog(`→ POST /bench/run  { endpoint: "${endpoint}", iterations: ${iterations}, concurrency: ${concurrency} } ...`);
+
+    // Animate progress while waiting for real response
+    const progressInterval = setInterval(() => {
+      setProgress(p => Math.min(p + 8, 90));
+    }, 200);
+
+    const result = await toqueBenchRun({ endpoint, iterations, concurrency, label: runLabel });
+    clearInterval(progressInterval);
+    setProgress(100);
+
+    if (result.ok && result.data) {
+      const d = result.data;
+      setRuns(prev => prev.map(r =>
+        r.id === newRun.id
+          ? {
+              ...r,
+              status: 'done',
+              avgMs: d.avgMs,
+              minMs: d.minMs,
+              maxMs: d.maxMs,
+              p95Ms: d.p95Ms,
+              successRate: d.successRate,
+              httpStatus: result.status,
+            }
+          : r
+      ));
+      appendLog(`✓ POST /bench/run → ${result.status} (${result.latencyMs}ms)`);
+      appendLog(`  avg: ${d.avgMs}ms  min: ${d.minMs}ms  max: ${d.maxMs}ms  p95: ${d.p95Ms}ms  success: ${d.successRate}%`);
+      toast.success(`Benchmark complete — avg ${d.avgMs}ms, ${d.successRate}% success`);
+    } else {
+      const errMsg = result.error || `HTTP ${result.status}`;
+      setRuns(prev => prev.map(r =>
+        r.id === newRun.id ? { ...r, status: 'error', httpStatus: result.status } : r
+      ));
+      appendLog(`✗ POST /bench/run → ${result.status || 'ERR'}: ${errMsg}`);
+      toast.error('Benchmark failed: ' + errMsg);
     }
 
-    const success = Math.random() > 0.15;
-    const avgMs = Math.floor(40 + Math.random() * 300);
-    setRuns(prev => prev.map(r =>
-      r.id === newRun.id
-        ? {
-            ...r,
-            status: success ? 'done' : 'error',
-            avgMs,
-            minMs: Math.floor(avgMs * 0.4),
-            maxMs: Math.floor(avgMs * 4.5),
-            p95Ms: Math.floor(avgMs * 2.2),
-            successRate: success ? +(95 + Math.random() * 5).toFixed(1) : +(60 + Math.random() * 30).toFixed(1),
-          }
-        : r
-    ));
     setIsRunning(false);
     setProgress(0);
     setLabel('');
+  };
+
+  const handleLoadResults = async () => {
+    setIsLoadingResults(true);
+    appendLog('$ toque bench results');
+    appendLog('→ GET /bench/results ...');
+    const result = await toqueBenchResults();
+    if (result.ok && result.data?.runs?.length) {
+      const serverRuns: BenchmarkRun[] = result.data.runs.map(r => ({
+        id: r.runId,
+        label: r.label,
+        endpoint: r.endpoint,
+        iterations: r.iterations,
+        concurrency: r.concurrency,
+        status: r.status,
+        avgMs: r.avgMs,
+        minMs: r.minMs,
+        maxMs: r.maxMs,
+        p95Ms: r.p95Ms,
+        successRate: r.successRate,
+        startedAt: r.startedAt,
+        cliCommand: `toque bench run --endpoint "${r.endpoint}"`,
+      }));
+      setRuns(serverRuns);
+      appendLog(`✓ GET /bench/results → ${result.status} (${result.latencyMs}ms)  ${serverRuns.length} runs`);
+      toast.success(`${serverRuns.length} benchmark runs loaded`);
+    } else {
+      appendLog(`✗ GET /bench/results → ${result.status || 'ERR'}: ${result.error}`);
+      toast.error('Could not load results: ' + result.error);
+    }
+    setIsLoadingResults(false);
   };
 
   const statusColor = (s: BenchmarkRun['status']) =>
@@ -101,11 +152,21 @@ export default function BenchmarkingPanelContent() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <div>
-        <h1 className="text-3xl font-semibold" style={{ color: 'var(--foreground)' }}>Benchmarking</h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--muted-foreground)' }}>
-          Stress-test API endpoints — measure latency, throughput, and error rates
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold" style={{ color: 'var(--foreground)' }}>Benchmarking</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--muted-foreground)' }}>
+            Stress-test API endpoints — wired to <span className="font-mono text-xs" style={{ color: 'var(--accent)' }}>POST /bench/run · GET /bench/results</span>
+          </p>
+        </div>
+        <button
+          onClick={handleLoadResults}
+          disabled={isLoadingResults}
+          className="btn-ghost px-4 py-2 text-sm"
+        >
+          {isLoadingResults ? <LoadingSpinner size={14} /> : <Icon name="ArrowDownTrayIcon" size={14} />}
+          Load Results
+        </button>
       </div>
 
       {/* Config card */}
@@ -114,43 +175,28 @@ export default function BenchmarkingPanelContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>Endpoint</label>
-            <select
-              className="input-field px-3 py-2 text-sm"
-              value={endpoint}
-              onChange={e => setEndpoint(e.target.value)}
-            >
+            <select className="input-field px-3 py-2 text-sm" value={endpoint} onChange={e => setEndpoint(e.target.value)}>
               {ENDPOINTS.map(ep => <option key={ep} value={ep}>{ep}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>Label (optional)</label>
-            <input
-              className="input-field px-3 py-2 text-sm"
-              placeholder="e.g. Stress test v2"
-              value={label}
-              onChange={e => setLabel(e.target.value)}
-            />
+            <input className="input-field px-3 py-2 text-sm" placeholder="e.g. Stress test v2" value={label} onChange={e => setLabel(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>Iterations</label>
-            <input
-              type="number"
-              className="input-field px-3 py-2 text-sm font-mono"
-              min={1} max={1000}
-              value={iterations}
-              onChange={e => setIterations(Number(e.target.value))}
-            />
+            <input type="number" className="input-field px-3 py-2 text-sm font-mono" min={1} max={1000} value={iterations} onChange={e => setIterations(Number(e.target.value))} />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>Concurrency</label>
-            <input
-              type="number"
-              className="input-field px-3 py-2 text-sm font-mono"
-              min={1} max={50}
-              value={concurrency}
-              onChange={e => setConcurrency(Number(e.target.value))}
-            />
+            <input type="number" className="input-field px-3 py-2 text-sm font-mono" min={1} max={50} value={concurrency} onChange={e => setConcurrency(Number(e.target.value))} />
           </div>
+        </div>
+
+        {/* CLI preview */}
+        <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded font-mono text-xs" style={{ backgroundColor: 'var(--input)', border: '1px solid var(--border)' }}>
+          <span style={{ color: 'var(--accent)' }}>$</span>
+          <span style={{ color: 'var(--foreground)' }}>toque bench run --endpoint &quot;{endpoint}&quot; --iter {iterations} --concurrency {concurrency}</span>
         </div>
 
         {isRunning && (
@@ -160,25 +206,38 @@ export default function BenchmarkingPanelContent() {
               <span className="text-xs font-mono" style={{ color: 'var(--accent)' }}>{progress}%</span>
             </div>
             <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--muted)' }}>
-              <div
-                className="h-full rounded-full transition-all duration-200"
-                style={{ width: `${progress}%`, backgroundColor: 'var(--primary)' }}
-              />
+              <div className="h-full rounded-full transition-all duration-200" style={{ width: `${progress}%`, backgroundColor: 'var(--primary)' }} />
             </div>
           </div>
         )}
 
         <div className="mt-4 flex justify-end">
-          <button
-            onClick={handleRun}
-            disabled={isRunning}
-            className="btn-primary px-5 py-2 text-sm"
-          >
+          <button onClick={handleRun} disabled={isRunning} className="btn-primary px-5 py-2 text-sm">
             <Icon name="PlayIcon" size={14} />
             {isRunning ? 'Running...' : 'Run Benchmark'}
           </button>
         </div>
       </div>
+
+      {/* CLI log */}
+      {cliLog.length > 0 && (
+        <div className="card-surface overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2">
+              <Icon name="CommandLineIcon" size={13} style={{ color: 'var(--accent)' }} />
+              <span className="text-xs font-semibold font-mono" style={{ color: 'var(--foreground)' }}>CLI Output</span>
+            </div>
+            <button onClick={() => setCliLog([])} className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Clear</button>
+          </div>
+          <div className="p-4 font-mono text-xs space-y-0.5 overflow-y-auto" style={{ backgroundColor: '#050508', maxHeight: '140px' }}>
+            {cliLog.map((line, i) => (
+              <div key={`bench-log-${i}`} style={{ color: line.startsWith('✓') ? 'var(--success)' : line.startsWith('✗') ? 'var(--error)' : line.startsWith('$') ? 'var(--accent)' : 'var(--muted-foreground)' }}>
+                {line}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Results table */}
       <div className="card-surface overflow-hidden">
@@ -190,15 +249,21 @@ export default function BenchmarkingPanelContent() {
           <table className="w-full text-xs font-mono">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Label', 'Endpoint', 'Iter', 'Conc', 'Avg', 'Min', 'Max', 'p95', 'Success%', 'Status'].map(h => (
+                {['Label', 'CLI Command', 'Endpoint', 'Iter', 'Conc', 'Avg', 'Min', 'Max', 'p95', 'Success%', 'Status'].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left font-semibold" style={{ color: 'var(--muted-foreground)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
+              {runs.length === 0 && (
+                <tr><td colSpan={11} className="px-4 py-6 text-center" style={{ color: 'var(--muted-foreground)' }}>No runs yet — configure and run a benchmark above</td></tr>
+              )}
               {runs.map(r => (
                 <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td className="px-4 py-2.5" style={{ color: 'var(--foreground)' }}>{r.label}</td>
+                  <td className="px-4 py-2.5" style={{ color: 'var(--accent)', maxWidth: '180px' }}>
+                    <span className="truncate block" title={r.cliCommand}>$ {r.cliCommand?.replace('toque bench run ', '')}</span>
+                  </td>
                   <td className="px-4 py-2.5" style={{ color: 'var(--accent)' }}>{r.endpoint}</td>
                   <td className="px-4 py-2.5" style={{ color: 'var(--foreground)' }}>{r.iterations}</td>
                   <td className="px-4 py-2.5" style={{ color: 'var(--foreground)' }}>{r.concurrency}</td>
