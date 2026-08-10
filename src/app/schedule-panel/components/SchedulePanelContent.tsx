@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/AppIcon';
@@ -12,31 +12,28 @@ import Toggle from '@/components/ui/Toggle';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import ErrorAlert from '@/components/ui/ErrorAlert';
 import SkeletonBlock from '@/components/ui/SkeletonBlock';
+import {
+  toqueScheduleCreate,
+  toqueScheduleGet,
+  toqueScheduleCancel,
+  toqueGroupsList,
+  type ScheduledWorkflow,
+  type ScheduleCreatePayload,
+  type Group,
+} from '@/lib/toque/client';
 
 type WorkflowStatus = 'pending' | 'running' | 'success' | 'error' | 'cancelled';
 
-interface ScheduledWorkflow {
-  id: string;
-  groupId: string;
-  groupName: string;
-  scheduledTime: string;
-  status: WorkflowStatus;
-  pullBefore: boolean;
-  createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  latencyMs?: number;
-  visasSent?: number;
-  errorCode?: string;
-}
-
 interface ScheduleFormValues {
   targetTime: string;
+  targetDate: string;
+  timezone: string;
   groupId: string;
+  priority: 'low' | 'normal' | 'high';
+  maxRetries: number;
 }
 
-// Mock pilgrim groups — backend: GET /groups/list
-const MOCK_GROUPS = [
+const FALLBACK_GROUPS: Group[] = [
   { id: 'GRP-001', name: 'Hajj Group Alpha 2026' },
   { id: 'GRP-002', name: 'Umrah Package Delta' },
   { id: 'GRP-003', name: 'VIP Pilgrimage Group' },
@@ -44,85 +41,40 @@ const MOCK_GROUPS = [
   { id: 'GRP-005', name: 'Corporate Hajj Delegation' },
 ];
 
-// Mock active workflows — backend: GET /schedule/get
-const INITIAL_WORKFLOWS: ScheduledWorkflow[] = [
-  {
-    id: 'WF-001',
-    groupId: 'GRP-001',
-    groupName: 'Hajj Group Alpha 2026',
-    scheduledTime: '14:30:00.000',
-    status: 'pending',
-    pullBefore: true,
-    createdAt: '2026-08-10T06:00:00Z',
-  },
-  {
-    id: 'WF-002',
-    groupId: 'GRP-002',
-    groupName: 'Umrah Package Delta',
-    scheduledTime: '09:00:00.000',
-    status: 'running',
-    pullBefore: false,
-    createdAt: '2026-08-10T05:45:00Z',
-    startedAt: '2026-08-10T09:00:00Z',
-  },
-  {
-    id: 'WF-003',
-    groupId: 'GRP-003',
-    groupName: 'VIP Pilgrimage Group',
-    scheduledTime: '07:00:00.000',
-    status: 'success',
-    pullBefore: true,
-    createdAt: '2026-08-10T04:30:00Z',
-    startedAt: '2026-08-10T07:00:00Z',
-    completedAt: '2026-08-10T07:00:00.214Z',
-    latencyMs: 214,
-    visasSent: 8,
-  },
-  {
-    id: 'WF-004',
-    groupId: 'GRP-004',
-    groupName: 'Ramadan Umrah Batch 7',
-    scheduledTime: '06:30:00.000',
-    status: 'error',
-    pullBefore: true,
-    createdAt: '2026-08-10T04:00:00Z',
-    startedAt: '2026-08-10T06:30:00Z',
-    completedAt: '2026-08-10T06:30:03.201Z',
-    latencyMs: 3201,
-    errorCode: 'AUTH_TOKEN_EXPIRED',
-  },
-  {
-    id: 'WF-005',
-    groupId: 'GRP-005',
-    groupName: 'Corporate Hajj Delegation',
-    scheduledTime: '15:00:00.000',
-    status: 'pending',
-    pullBefore: true,
-    createdAt: '2026-08-10T07:00:00Z',
-  },
-  {
-    id: 'WF-006',
-    groupId: 'GRP-001',
-    groupName: 'Hajj Group Alpha 2026',
-    scheduledTime: '22:00:00.000',
-    status: 'cancelled',
-    pullBefore: false,
-    createdAt: '2026-08-09T18:00:00Z',
-  },
+const TIMEZONES = [
+  { label: 'UTC', value: 'UTC' },
+  { label: 'Asia/Riyadh (AST +3)', value: 'Asia/Riyadh' },
+  { label: 'Asia/Mecca (AST +3)', value: 'Asia/Mecca' },
+  { label: 'Asia/Dubai (GST +4)', value: 'Asia/Dubai' },
+  { label: 'Asia/Karachi (PKT +5)', value: 'Asia/Karachi' },
+  { label: 'Asia/Jakarta (WIB +7)', value: 'Asia/Jakarta' },
+  { label: 'Europe/London (GMT)', value: 'Europe/London' },
+  { label: 'America/New_York (EST)', value: 'America/New_York' },
+];
+
+const TIME_PRESETS = [
+  { label: '06:00', value: '06:00:00.000' },
+  { label: '09:00', value: '09:00:00.000' },
+  { label: '12:00', value: '12:00:00.000' },
+  { label: '14:30', value: '14:30:00.000' },
+  { label: '18:00', value: '18:00:00.000' },
+  { label: '22:00', value: '22:00:00.000' },
 ];
 
 function formatTimestamp(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleString('en-US', {
-    month: 'short', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-    hour12: false,
-  });
+  return d.toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function getToday() {
+  return new Date().toISOString().split('T')[0];
 }
 
 export default function SchedulePanelContent() {
-  const [workflows, setWorkflows] = useState<ScheduledWorkflow[]>(INITIAL_WORKFLOWS);
+  const [workflows, setWorkflows] = useState<ScheduledWorkflow[]>([]);
+  const [groups, setGroups] = useState<Group[]>(FALLBACK_GROUPS);
   const [pullBefore, setPullBefore] = useState(true);
+  const [retryOnFail, setRetryOnFail] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -133,18 +85,78 @@ export default function SchedulePanelContent() {
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
   const [statusFilter, setStatusFilter] = useState<WorkflowStatus | 'all'>('all');
   const [mounted, setMounted] = useState(false);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [cliLog, setCliLog] = useState<string[]>([]);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [countdown, setCountdown] = useState<string>('');
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
+
+  const appendLog = (line: string) =>
+    setCliLog(prev => [...prev.slice(-99), line]);
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<ScheduleFormValues>({
-    defaultValues: { targetTime: '', groupId: '' },
+    defaultValues: {
+      targetTime: '',
+      targetDate: getToday(),
+      timezone: 'UTC',
+      groupId: '',
+      priority: 'normal',
+      maxRetries: 3,
+    },
   });
 
   const watchedGroupId = watch('groupId');
+  const watchedTargetTime = watch('targetTime');
+  const watchedTargetDate = watch('targetDate');
+  const watchedTimezone = watch('timezone');
 
-  const handleSelectGroup = (group: typeof MOCK_GROUPS[0]) => {
+  // Countdown to next scheduled workflow
+  useEffect(() => {
+    const pending = workflows.filter(w => w.status === 'pending');
+    if (!pending.length || !mounted) return;
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      const times = pending.map(w => {
+        const [h, m, s] = w.scheduledTime.split(':').map(Number);
+        const t = new Date();
+        t.setHours(h, m, Math.floor(s || 0), 0);
+        if (t < now) t.setDate(t.getDate() + 1);
+        return t.getTime() - now.getTime();
+      });
+      const nearest = Math.min(...times);
+      if (nearest < 0) { setCountdown(''); return; }
+      const h = Math.floor(nearest / 3600000);
+      const m = Math.floor((nearest % 3600000) / 60000);
+      const s = Math.floor((nearest % 60000) / 1000);
+      setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [workflows, mounted]);
+
+  // Auto-refresh
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => handleRefreshWorkflows(), 15000);
+    return () => clearInterval(interval);
+  }, [autoRefresh]);
+
+  const handleLoadGroups = async () => {
+    setIsLoadingGroups(true);
+    appendLog('$ toque groups list');
+    const result = await toqueGroupsList();
+    if (result.ok && result.data?.groups?.length) {
+      setGroups(result.data.groups);
+      appendLog(`✓ GET /groups/list → ${result.status} (${result.latencyMs}ms)  ${result.data.groups.length} groups`);
+      toast.success(`${result.data.groups.length} groups loaded`);
+    } else {
+      appendLog(`✗ GET /groups/list → ${result.status || 'ERR'}: ${result.error}`);
+    }
+    setIsLoadingGroups(false);
+  };
+
+  const handleSelectGroup = (group: Group) => {
     setValue('groupId', group.id);
     setSelectedGroup(group.name);
     setShowGroupDropdown(false);
@@ -154,59 +166,90 @@ export default function SchedulePanelContent() {
     setIsCreating(true);
     setCreateError(null);
 
-    // Backend integration point: POST /schedule/create { groupId, targetTime, pullBefore }
-    await new Promise(r => setTimeout(r, 900));
+    const payload: ScheduleCreatePayload = {
+      groupId: data.groupId,
+      targetTime: data.targetTime,
+      targetDate: data.targetDate || undefined,
+      timezone: data.timezone || 'UTC',
+      pullBefore,
+      retryOnFail,
+      maxRetries: data.maxRetries,
+      priority: data.priority,
+    };
 
-    const success = Math.random() > 0.08;
-    if (success) {
-      const group = MOCK_GROUPS.find(g => g.id === data.groupId);
+    const cliCmd = `toque schedule create --group ${data.groupId} --time ${data.targetTime} --date ${data.targetDate} --tz ${data.timezone} --pull-before ${pullBefore} --retry ${retryOnFail} --priority ${data.priority}`;
+    appendLog(`$ ${cliCmd}`);
+    appendLog(`→ POST /schedule/create  ${JSON.stringify(payload)}`);
+
+    const result = await toqueScheduleCreate(payload);
+
+    if (result.ok && result.data) {
+      const d = result.data;
       const newWorkflow: ScheduledWorkflow = {
-        id: `WF-${String(workflows.length + 1).padStart(3, '0')}`,
+        id: d.workflowId,
         groupId: data.groupId,
-        groupName: group?.name ?? data.groupId,
+        groupName: groups.find(g => g.id === data.groupId)?.name ?? data.groupId,
         scheduledTime: data.targetTime,
+        targetDate: data.targetDate,
+        timezone: data.timezone,
         status: 'pending',
         pullBefore,
-        createdAt: new Date().toISOString(),
+        retryOnFail,
+        maxRetries: data.maxRetries,
+        createdAt: d.createdAt || new Date().toISOString(),
       };
       setWorkflows(prev => [newWorkflow, ...prev]);
       setLastCreated(newWorkflow);
-      toast.success(`Workflow ${newWorkflow.id} scheduled for ${data.targetTime}`);
-      reset();
+      appendLog(`✓ POST /schedule/create → ${result.status} (${result.latencyMs}ms)  workflowId: ${d.workflowId}`);
+      toast.success(`Workflow ${d.workflowId} scheduled for ${data.targetTime} (${data.timezone})`);
+      reset({ targetTime: '', targetDate: getToday(), timezone: 'UTC', groupId: '', priority: 'normal', maxRetries: 3 });
       setSelectedGroup('');
       setPullBefore(true);
+      setRetryOnFail(true);
     } else {
-      setCreateError('POST /schedule/create returned 500 — Cloudflare Workflow creation failed. Check Worker logs and ensure the container is running.');
-      toast.error('Workflow creation failed');
+      const errMsg = result.error || `HTTP ${result.status}`;
+      setCreateError(`POST /schedule/create → ${result.status || 'ERR'}: ${errMsg}`);
+      appendLog(`✗ POST /schedule/create → ${result.status || 'ERR'}: ${errMsg}`);
+      toast.error('Workflow creation failed: ' + errMsg);
     }
 
     setIsCreating(false);
   });
 
-  const handleRefreshWorkflows = async () => {
+  const handleRefreshWorkflows = useCallback(async () => {
     setIsRefreshing(true);
-    // Backend integration point: GET /schedule/get
-    await new Promise(r => setTimeout(r, 700));
+    appendLog('$ toque schedule get');
+    appendLog('→ GET /schedule/get ...');
+    const result = await toqueScheduleGet();
+    if (result.ok && result.data) {
+      setWorkflows(result.data.workflows || []);
+      appendLog(`✓ GET /schedule/get → ${result.status} (${result.latencyMs}ms)  ${result.data.total || 0} workflows`);
+      toast.success(`${result.data.total || 0} workflows loaded`);
+    } else {
+      appendLog(`✗ GET /schedule/get → ${result.status || 'ERR'}: ${result.error}`);
+      toast.error('Could not load workflows: ' + result.error);
+    }
     setIsRefreshing(false);
-    toast.success('Workflows refreshed — 6 active workflows');
-  };
+  }, []);
 
   const handleCancelWorkflow = async (workflowId: string) => {
     setCancellingId(workflowId);
     setConfirmCancelId(null);
-    // Backend integration point: POST /schedule/cancel { workflowId }
-    await new Promise(r => setTimeout(r, 600));
-    setWorkflows(prev =>
-      prev.map(w => w.id === workflowId ? { ...w, status: 'cancelled' as WorkflowStatus } : w)
-    );
+    appendLog(`$ toque schedule cancel ${workflowId}`);
+    appendLog(`→ POST /schedule/cancel  { workflowId: "${workflowId}" } ...`);
+    const result = await toqueScheduleCancel(workflowId);
+    if (result.ok) {
+      setWorkflows(prev => prev.map(w => w.id === workflowId ? { ...w, status: 'cancelled' as WorkflowStatus } : w));
+      appendLog(`✓ POST /schedule/cancel → ${result.status} (${result.latencyMs}ms)`);
+      toast.success(`Workflow ${workflowId} cancelled`);
+    } else {
+      appendLog(`✗ POST /schedule/cancel → ${result.status || 'ERR'}: ${result.error}`);
+      toast.error('Cancel failed: ' + result.error);
+    }
     setCancellingId(null);
-    toast.success(`Workflow ${workflowId} cancelled`);
   };
 
-  const filteredWorkflows = statusFilter === 'all'
-    ? workflows
-    : workflows.filter(w => w.status === statusFilter);
-
+  const filteredWorkflows = statusFilter === 'all' ? workflows : workflows.filter(w => w.status === statusFilter);
   const pendingCount = workflows.filter(w => w.status === 'pending').length;
   const runningCount = workflows.filter(w => w.status === 'running').length;
   const successCount = workflows.filter(w => w.status === 'success').length;
@@ -214,43 +257,37 @@ export default function SchedulePanelContent() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      {/* Page header */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold" style={{ color: 'var(--foreground)' }}>
-            Schedule
-          </h1>
+          <h1 className="text-3xl font-semibold" style={{ color: 'var(--foreground)' }}>Schedule</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--muted-foreground)' }}>
-            Create and manage time-triggered visa send workflows via Cloudflare Workers
+            Time-triggered visa send workflows — wired to <span className="font-mono text-xs" style={{ color: 'var(--accent)' }}>POST /schedule/create · GET /schedule/get · POST /schedule/cancel</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {countdown && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)' }}>
+              <Icon name="ClockIcon" size={12} />
+              <span className="text-xs font-mono font-semibold" style={{ color: 'var(--accent)' }}>Next: {countdown}</span>
+            </div>
+          )}
           {pendingCount > 0 && (
-            <div
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-              style={{ backgroundColor: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)' }}
-            >
-              <span className="w-2 h-2 rounded-full pulse-dot" style={{ backgroundColor: 'var(--primary)' }} />
-              <span className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>
-                {pendingCount} pending
-              </span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)' }}>
+              <span className="w-2 h-2 rounded-full pulse-dot" style={{ backgroundColor: 'var(--warning)' }} />
+              <span className="text-xs font-semibold" style={{ color: 'var(--warning)' }}>{pendingCount} pending</span>
             </div>
           )}
           {runningCount > 0 && (
-            <div
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-              style={{ backgroundColor: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}
-            >
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
               <span className="w-2 h-2 rounded-full pulse-dot" style={{ backgroundColor: 'var(--success)' }} />
-              <span className="text-xs font-semibold" style={{ color: 'var(--success)' }}>
-                {runningCount} running
-              </span>
+              <span className="text-xs font-semibold" style={{ color: 'var(--success)' }}>{runningCount} running</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Pending', value: pendingCount, color: 'var(--warning)', icon: 'ClockIcon', bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.15)' },
@@ -258,20 +295,12 @@ export default function SchedulePanelContent() {
           { label: 'Completed', value: successCount, color: 'var(--success)', icon: 'CheckCircleIcon', bg: 'rgba(34,197,94,0.06)', border: 'rgba(34,197,94,0.15)' },
           { label: 'Failed', value: errorCount, color: errorCount > 0 ? 'var(--error)' : 'var(--muted-foreground)', icon: 'XCircleIcon', bg: errorCount > 0 ? 'rgba(239,68,68,0.06)' : 'var(--card)', border: errorCount > 0 ? 'rgba(239,68,68,0.15)' : 'var(--border)' },
         ].map(stat => (
-          <div
-            key={`sched-stat-${stat.label}`}
-            className="p-4 rounded-lg"
-            style={{ backgroundColor: stat.bg, border: `1px solid ${stat.border}` }}
-          >
+          <div key={`sched-stat-${stat.label}`} className="p-4 rounded-lg" style={{ backgroundColor: stat.bg, border: `1px solid ${stat.border}` }}>
             <div className="flex items-center gap-2 mb-1.5">
               <Icon name={stat.icon as Parameters<typeof Icon>[0]['name']} size={14} />
-              <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--muted-foreground)', fontSize: '10px', letterSpacing: '0.07em' }}>
-                {stat.label}
-              </span>
+              <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--muted-foreground)', fontSize: '10px', letterSpacing: '0.07em' }}>{stat.label}</span>
             </div>
-            <p className="font-mono font-bold text-3xl tabular-nums" style={{ color: stat.color }}>
-              {stat.value}
-            </p>
+            <p className="font-mono font-bold text-3xl tabular-nums" style={{ color: stat.color }}>{stat.value}</p>
           </div>
         ))}
       </div>
@@ -279,19 +308,15 @@ export default function SchedulePanelContent() {
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
         {/* Create workflow form */}
         <div className="xl:col-span-2 space-y-4">
-          <SectionCard
-            title="Create Scheduled Send"
-            description="Schedule a visa send for a precise target time"
-          >
-            <form onSubmit={onCreateSchedule} className="space-y-5">
-              {/* Target time */}
+          <SectionCard title="Create Scheduled Send" description="Schedule a visa send for a precise target time">
+            <form onSubmit={onCreateSchedule} className="space-y-4">
+
+              {/* Target Time */}
               <div>
-                <label htmlFor="targetTime" className="block text-sm font-medium mb-1.5" style={{ color: 'var(--foreground)' }}>
-                  Target Time (UTC)
+                <label htmlFor="targetTime" className="block text-sm font-medium mb-1" style={{ color: 'var(--foreground)' }}>
+                  Target Time (HH:MM:SS.mmm)
                 </label>
-                <p className="text-xs mb-2" style={{ color: 'var(--muted-foreground)' }}>
-                  Sub-millisecond precision — format: HH:MM:SS.mmm (24-hour UTC)
-                </p>
+                <p className="text-xs mb-2" style={{ color: 'var(--muted-foreground)' }}>Sub-millisecond precision — 24-hour format</p>
                 <input
                   id="targetTime"
                   type="text"
@@ -299,48 +324,74 @@ export default function SchedulePanelContent() {
                   placeholder="14:30:00.000"
                   {...register('targetTime', {
                     required: 'Target time is required',
-                    pattern: {
-                      value: /^\d{2}:\d{2}:\d{2}\.\d{3}$/,
-                      message: 'Must be in HH:MM:SS.mmm format (e.g. 14:30:00.000)',
-                    },
+                    pattern: { value: /^\d{2}:\d{2}:\d{2}\.\d{3}$/, message: 'Format: HH:MM:SS.mmm (e.g. 14:30:00.000)' },
                   })}
                 />
-                {errors.targetTime && (
-                  <p className="mt-1.5 text-xs" style={{ color: 'var(--error)' }}>
-                    {errors.targetTime.message}
-                  </p>
-                )}
-
-                {/* Quick presets */}
+                {errors.targetTime && <p className="mt-1 text-xs" style={{ color: 'var(--error)' }}>{errors.targetTime.message}</p>}
                 <div className="flex gap-1.5 mt-2 flex-wrap">
-                  {['09:00:00.000', '12:00:00.000', '14:30:00.000', '18:00:00.000', '22:00:00.000'].map(t => (
+                  {TIME_PRESETS.map(t => (
                     <button
-                      key={`preset-${t}`}
+                      key={`preset-${t.value}`}
                       type="button"
-                      onClick={() => setValue('targetTime', t)}
+                      onClick={() => setValue('targetTime', t.value)}
                       className="font-mono px-2 py-1 rounded text-2xs transition-colors duration-100"
                       style={{
-                        backgroundColor: watch('targetTime') === t ? 'rgba(99,102,241,0.2)' : 'var(--input)',
-                        color: watch('targetTime') === t ? 'var(--accent)' : 'var(--muted-foreground)',
-                        border: `1px solid ${watch('targetTime') === t ? 'rgba(99,102,241,0.4)' : 'var(--border)'}`,
+                        backgroundColor: watchedTargetTime === t.value ? 'rgba(99,102,241,0.2)' : 'var(--input)',
+                        color: watchedTargetTime === t.value ? 'var(--accent)' : 'var(--muted-foreground)',
+                        border: `1px solid ${watchedTargetTime === t.value ? 'rgba(99,102,241,0.4)' : 'var(--border)'}`,
                         fontSize: '10px',
                       }}
                     >
-                      {t}
+                      {t.label}
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Target Date */}
+              <div>
+                <label htmlFor="targetDate" className="block text-sm font-medium mb-1" style={{ color: 'var(--foreground)' }}>
+                  Target Date
+                </label>
+                <input
+                  id="targetDate"
+                  type="date"
+                  className="input-field w-full px-3 py-2.5 font-mono text-sm"
+                  {...register('targetDate', { required: 'Target date is required' })}
+                />
+                {errors.targetDate && <p className="mt-1 text-xs" style={{ color: 'var(--error)' }}>{errors.targetDate.message}</p>}
+              </div>
+
+              {/* Timezone */}
+              <div>
+                <label htmlFor="timezone" className="block text-sm font-medium mb-1" style={{ color: 'var(--foreground)' }}>
+                  Timezone
+                </label>
+                <select
+                  id="timezone"
+                  className="input-field w-full px-3 py-2.5 text-sm"
+                  {...register('timezone')}
+                >
+                  {TIMEZONES.map(tz => (
+                    <option key={tz.value} value={tz.value}>{tz.label}</option>
+                  ))}
+                </select>
+                {watchedTargetTime && watchedTargetDate && (
+                  <p className="mt-1 text-xs font-mono" style={{ color: 'var(--accent)' }}>
+                    → {watchedTargetDate}T{watchedTargetTime} [{watchedTimezone}]
+                  </p>
+                )}
+              </div>
+
               {/* Group ID */}
               <div>
-                <label htmlFor="schedGroupId" className="block text-sm font-medium mb-1.5" style={{ color: 'var(--foreground)' }}>
-                  Group ID
-                </label>
-                <p className="text-xs mb-2" style={{ color: 'var(--muted-foreground)' }}>
-                  Target pilgrim group for the scheduled visa send
-                </p>
-
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor="schedGroupId" className="block text-sm font-medium" style={{ color: 'var(--foreground)' }}>Group ID</label>
+                  <button type="button" onClick={handleLoadGroups} disabled={isLoadingGroups} className="text-xs flex items-center gap-1" style={{ color: 'var(--accent)' }}>
+                    {isLoadingGroups ? <LoadingSpinner size={10} /> : <Icon name="ArrowPathIcon" size={10} />}
+                    Reload
+                  </button>
+                </div>
                 <div className="relative mb-2">
                   <button
                     type="button"
@@ -352,13 +403,9 @@ export default function SchedulePanelContent() {
                     </span>
                     <Icon name="ChevronDownIcon" size={14} />
                   </button>
-
                   {showGroupDropdown && (
-                    <div
-                      className="absolute top-full left-0 right-0 mt-1 rounded-lg z-20 overflow-hidden animate-fade-in"
-                      style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
-                    >
-                      {MOCK_GROUPS.map(group => (
+                    <div className="absolute top-full left-0 right-0 mt-1 rounded-lg z-20 overflow-hidden animate-fade-in" style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+                      {groups.map(group => (
                         <button
                           key={`sched-group-${group.id}`}
                           type="button"
@@ -378,72 +425,97 @@ export default function SchedulePanelContent() {
                     </div>
                   )}
                 </div>
-
                 <input
                   id="schedGroupId"
                   type="text"
                   className="input-field w-full px-3 py-2.5 font-mono text-sm"
                   placeholder="GRP-001"
-                  {...register('groupId', {
-                    required: 'Group ID is required',
-                    pattern: {
-                      value: /^[A-Z0-9\-_]+$/i,
-                      message: 'Group ID must be alphanumeric',
-                    },
-                  })}
+                  {...register('groupId', { required: 'Group ID is required', pattern: { value: /^[A-Z0-9\-_]+$/i, message: 'Alphanumeric only' } })}
                 />
-                {errors.groupId && (
-                  <p className="mt-1.5 text-xs" style={{ color: 'var(--error)' }}>
-                    {errors.groupId.message}
-                  </p>
-                )}
+                {errors.groupId && <p className="mt-1 text-xs" style={{ color: 'var(--error)' }}>{errors.groupId.message}</p>}
               </div>
 
-              {/* Pull Before toggle */}
-              <div
-                className="p-3 rounded-lg"
-                style={{ backgroundColor: 'var(--input)', border: '1px solid var(--border)' }}
-              >
+              {/* Priority */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>Priority</label>
+                <div className="flex gap-2">
+                  {(['low', 'normal', 'high'] as const).map(p => {
+                    const color = p === 'high' ? 'var(--error)' : p === 'normal' ? 'var(--accent)' : 'var(--muted-foreground)';
+                    const active = watch('priority') === p;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setValue('priority', p)}
+                        className="flex-1 py-2 px-3 rounded text-xs font-semibold capitalize transition-all"
+                        style={{
+                          backgroundColor: active ? `${color}18` : 'var(--input)',
+                          color: active ? color : 'var(--muted-foreground)',
+                          border: `1px solid ${active ? color : 'var(--border)'}`,
+                        }}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Max Retries */}
+              <div>
+                <label htmlFor="maxRetries" className="block text-sm font-medium mb-1" style={{ color: 'var(--foreground)' }}>
+                  Max Retries
+                </label>
+                <input
+                  id="maxRetries"
+                  type="number"
+                  min={0}
+                  max={10}
+                  className="input-field w-full px-3 py-2.5 font-mono text-sm"
+                  {...register('maxRetries', { min: 0, max: 10 })}
+                />
+              </div>
+
+              {/* Toggles */}
+              <div className="space-y-3 p-3 rounded-lg" style={{ backgroundColor: 'var(--input)', border: '1px solid var(--border)' }}>
                 <Toggle
                   checked={pullBefore}
                   onChange={setPullBefore}
                   label="Pull Before Send"
-                  description="Refresh credentials (auth, captcha, entityId) immediately before executing the visa send at the scheduled time"
+                  description="Refresh auth, captcha, and entityId immediately before executing the visa send"
                   id="pull-before-toggle"
                 />
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+                  <Toggle
+                    checked={retryOnFail}
+                    onChange={setRetryOnFail}
+                    label="Retry on Failure"
+                    description="Automatically retry the workflow if it fails (up to max retries)"
+                    id="retry-on-fail-toggle"
+                  />
+                </div>
               </div>
 
-              {/* Submit */}
-              <button
-                type="submit"
-                disabled={isCreating}
-                className="btn-primary w-full py-3 text-sm font-semibold"
-              >
-                {isCreating ? (
-                  <>
-                    <LoadingSpinner size={16} />
-                    Creating workflow...
-                  </>
-                ) : (
-                  <>
-                    <Icon name="CalendarDaysIcon" size={16} />
-                    Schedule Send — POST /schedule/create
-                  </>
-                )}
+              {/* CLI preview */}
+              {watchedGroupId && watchedTargetTime && (
+                <div className="p-3 rounded font-mono text-xs" style={{ backgroundColor: '#050508', border: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--accent)' }}>$ </span>
+                  <span style={{ color: 'var(--foreground)' }}>
+                    toque schedule create --group {watchedGroupId} --time {watchedTargetTime} --date {watchedTargetDate} --tz {watchedTimezone} --pull-before {String(pullBefore)} --retry {String(retryOnFail)} --priority {watch('priority')}
+                  </span>
+                </div>
+              )}
+
+              <button type="submit" disabled={isCreating} className="btn-primary w-full py-3 text-sm font-semibold">
+                {isCreating ? <><LoadingSpinner size={16} /> Creating workflow...</> : <><Icon name="CalendarDaysIcon" size={16} /> Schedule Send — POST /schedule/create</>}
               </button>
             </form>
           </SectionCard>
 
-          {/* Create error */}
           {createError && (
-            <ErrorAlert
-              message="Workflow creation failed"
-              detail={createError}
-              onRetry={() => handleSubmit(onCreateSchedule as never)()}
-            />
+            <ErrorAlert message="Workflow creation failed" detail={createError} onRetry={() => handleSubmit(onCreateSchedule as never)()} />
           )}
 
-          {/* Last created workflow */}
           {lastCreated && (
             <SectionCard title="Workflow Created" headerRight={<StatusBadge status="pending" />}>
               <JsonViewer
@@ -451,11 +523,16 @@ export default function SchedulePanelContent() {
                   workflowId: lastCreated.id,
                   groupId: lastCreated.groupId,
                   scheduledTime: lastCreated.scheduledTime,
+                  targetDate: lastCreated.targetDate,
+                  timezone: lastCreated.timezone,
                   pullBefore: lastCreated.pullBefore,
-                  createdAt: lastCreated.createdAt,
+                  retryOnFail: lastCreated.retryOnFail,
+                  maxRetries: lastCreated.maxRetries,
+                  priority: (lastCreated as ScheduledWorkflow & { priority?: string }).priority,
                   status: 'pending',
+                  createdAt: lastCreated.createdAt,
                 }}
-                maxHeight={200}
+                maxHeight={220}
                 title="POST /schedule/create response"
               />
             </SectionCard>
@@ -470,10 +547,19 @@ export default function SchedulePanelContent() {
             headerRight={
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleRefreshWorkflows}
-                  disabled={isRefreshing}
-                  className="btn-ghost px-3 py-1.5 text-xs"
+                  type="button"
+                  onClick={() => setAutoRefresh(v => !v)}
+                  className="px-2 py-1 rounded text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: autoRefresh ? 'rgba(34,197,94,0.1)' : 'var(--input)',
+                    color: autoRefresh ? 'var(--success)' : 'var(--muted-foreground)',
+                    border: `1px solid ${autoRefresh ? 'rgba(34,197,94,0.25)' : 'var(--border)'}`,
+                  }}
                 >
+                  <Icon name="ArrowPathIcon" size={11} />
+                  {autoRefresh ? 'Auto' : 'Manual'}
+                </button>
+                <button onClick={handleRefreshWorkflows} disabled={isRefreshing} className="btn-ghost px-3 py-1.5 text-xs">
                   {isRefreshing ? <LoadingSpinner size={12} /> : <Icon name="ArrowPathIcon" size={13} />}
                   {isRefreshing ? 'Refreshing...' : 'Refresh'}
                 </button>
@@ -485,10 +571,7 @@ export default function SchedulePanelContent() {
             noPadding
           >
             {/* Filter tabs */}
-            <div
-              className="flex gap-1 px-4 py-3 overflow-x-auto"
-              style={{ borderBottom: '1px solid var(--border)' }}
-            >
+            <div className="flex gap-1 px-4 py-3 overflow-x-auto" style={{ borderBottom: '1px solid var(--border)' }}>
               {(['all', 'pending', 'running', 'success', 'error', 'cancelled'] as const).map(f => (
                 <button
                   key={`filter-${f}`}
@@ -509,12 +592,8 @@ export default function SchedulePanelContent() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['Workflow ID', 'Group', 'Target Time', 'Pull?', 'Status', 'Result', 'Actions'].map(col => (
-                      <th
-                        key={`sched-th-${col}`}
-                        className="text-left px-4 py-3 font-medium"
-                        style={{ color: 'var(--muted-foreground)', fontSize: '11px', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}
-                      >
+                    {['Workflow ID', 'Group', 'Target Time', 'Date', 'TZ', 'Pull?', 'Priority', 'Status', 'Result', 'Actions'].map(col => (
+                      <th key={`sched-th-${col}`} className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted-foreground)', fontSize: '11px', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
                         {col}
                       </th>
                     ))}
@@ -524,7 +603,7 @@ export default function SchedulePanelContent() {
                   {isRefreshing ? (
                     Array.from({ length: 4 }).map((_, i) => (
                       <tr key={`skel-row-${i + 1}`} style={{ borderBottom: '1px solid var(--border)' }}>
-                        {Array.from({ length: 7 }).map((__, j) => (
+                        {Array.from({ length: 10 }).map((__, j) => (
                           <td key={`skel-cell-${i + 1}-${j + 1}`} className="px-4 py-3">
                             <SkeletonBlock height={14} width={j === 0 ? '70px' : j === 1 ? '120px' : '60px'} />
                           </td>
@@ -533,135 +612,102 @@ export default function SchedulePanelContent() {
                     ))
                   ) : filteredWorkflows.length === 0 ? (
                     <tr>
-                      <td colSpan={7}>
+                      <td colSpan={10}>
                         <div className="flex flex-col items-center justify-center py-12 text-center">
                           <Icon name="CalendarDaysIcon" size={32} />
                           <p className="mt-3 text-sm font-medium" style={{ color: 'var(--foreground)' }}>
                             No {statusFilter !== 'all' ? statusFilter : ''} workflows
                           </p>
                           <p className="mt-1 text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                            {statusFilter === 'all' ?'Create a scheduled send using the form to the left'
+                            {statusFilter === 'all' ?'Create a scheduled send using the form, or click Refresh to load from server'
                               : `No workflows with status "${statusFilter}" found`}
                           </p>
+                          <button onClick={handleRefreshWorkflows} className="mt-3 btn-ghost px-4 py-2 text-xs">
+                            <Icon name="ArrowPathIcon" size={12} /> Load from server
+                          </button>
                         </div>
                       </td>
                     </tr>
                   ) : (
-                    filteredWorkflows.map((wf, idx) => (
-                      <tr
-                        key={wf.id}
-                        className="transition-colors duration-100"
-                        style={{
-                          borderBottom: '1px solid var(--border)',
-                          backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(99,102,241,0.04)')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)')}
-                      >
-                        {/* Workflow ID */}
-                        <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--accent)', whiteSpace: 'nowrap' }}>
-                          {wf.id}
-                        </td>
-
-                        {/* Group */}
-                        <td className="px-4 py-3" style={{ maxWidth: '140px' }}>
-                          <p className="text-xs font-medium truncate" style={{ color: 'var(--foreground)' }}>
-                            {wf.groupName}
-                          </p>
-                          <p className="text-2xs font-mono" style={{ color: 'var(--muted-foreground)' }}>
-                            {wf.groupId}
-                          </p>
-                        </td>
-
-                        {/* Target time */}
-                        <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--foreground)', whiteSpace: 'nowrap' }}>
-                          {wf.scheduledTime}
-                        </td>
-
-                        {/* Pull before */}
-                        <td className="px-4 py-3">
-                          <span
-                            className="inline-flex items-center gap-1 text-2xs font-semibold px-1.5 py-0.5 rounded"
-                            style={{
-                              backgroundColor: wf.pullBefore ? 'rgba(34,197,94,0.1)' : 'rgba(100,116,139,0.1)',
-                              color: wf.pullBefore ? 'var(--success)' : 'var(--muted-foreground)',
-                              border: `1px solid ${wf.pullBefore ? 'rgba(34,197,94,0.2)' : 'rgba(100,116,139,0.15)'}`,
-                            }}
-                          >
-                            {wf.pullBefore ? '✓ Yes' : '✗ No'}
-                          </span>
-                        </td>
-
-                        {/* Status */}
-                        <td className="px-4 py-3">
-                          <StatusBadge status={wf.status as 'pending' | 'running' | 'success' | 'error' | 'cancelled'} />
-                        </td>
-
-                        {/* Result */}
-                        <td className="px-4 py-3 font-mono text-xs" style={{ whiteSpace: 'nowrap' }}>
-                          {wf.status === 'success' && wf.latencyMs !== undefined && (
-                            <div className="flex items-center gap-1.5">
-                              <TimingDisplay ms={wf.latencyMs} showLabel={false} />
-                              <span style={{ color: 'var(--success)' }}>{wf.visasSent}v</span>
-                            </div>
-                          )}
-                          {wf.status === 'error' && (
-                            <span style={{ color: 'var(--error)', fontSize: '10px' }}>{wf.errorCode}</span>
-                          )}
-                          {wf.status === 'running' && (
-                            <span className="flex items-center gap-1" style={{ color: 'var(--accent)' }}>
-                              <LoadingSpinner size={10} />
-                              <span style={{ fontSize: '10px' }}>In progress</span>
+                    filteredWorkflows.map((wf, idx) => {
+                      const wfWithPriority = wf as ScheduledWorkflow & { priority?: string };
+                      return (
+                        <tr
+                          key={wf.id}
+                          className="transition-colors duration-100"
+                          style={{ borderBottom: '1px solid var(--border)', backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(99,102,241,0.04)')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)')}
+                        >
+                          <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--accent)', whiteSpace: 'nowrap' }}>{wf.id}</td>
+                          <td className="px-4 py-3" style={{ maxWidth: '140px' }}>
+                            <p className="text-xs font-medium truncate" style={{ color: 'var(--foreground)' }}>{wf.groupName}</p>
+                            <p className="text-2xs font-mono" style={{ color: 'var(--muted-foreground)' }}>{wf.groupId}</p>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--foreground)', whiteSpace: 'nowrap' }}>{wf.scheduledTime}</td>
+                          <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--muted-foreground)', whiteSpace: 'nowrap' }}>{wf.targetDate || '—'}</td>
+                          <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--muted-foreground)' }}>{wf.timezone || 'UTC'}</td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center gap-1 text-2xs font-semibold px-1.5 py-0.5 rounded" style={{ backgroundColor: wf.pullBefore ? 'rgba(34,197,94,0.1)' : 'rgba(100,116,139,0.1)', color: wf.pullBefore ? 'var(--success)' : 'var(--muted-foreground)', border: `1px solid ${wf.pullBefore ? 'rgba(34,197,94,0.2)' : 'rgba(100,116,139,0.15)'}` }}>
+                              {wf.pullBefore ? '✓ Yes' : '✗ No'}
                             </span>
-                          )}
-                          {(wf.status === 'pending' || wf.status === 'cancelled') && (
-                            <span style={{ color: 'var(--muted-foreground)', fontSize: '10px' }}>—</span>
-                          )}
-                        </td>
-
-                        {/* Actions */}
-                        <td className="px-4 py-3">
-                          {(wf.status === 'pending' || wf.status === 'running') && (
-                            <>
-                              {confirmCancelId === wf.id ? (
-                                <div className="flex items-center gap-1.5">
+                          </td>
+                          <td className="px-4 py-3">
+                            {wfWithPriority.priority ? (
+                              <span className="text-2xs font-semibold capitalize" style={{ color: wfWithPriority.priority === 'high' ? 'var(--error)' : wfWithPriority.priority === 'normal' ? 'var(--accent)' : 'var(--muted-foreground)' }}>
+                                {wfWithPriority.priority}
+                              </span>
+                            ) : <span style={{ color: 'var(--muted-foreground)' }}>—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge status={wf.status as 'pending' | 'running' | 'success' | 'error' | 'cancelled'} />
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs" style={{ whiteSpace: 'nowrap' }}>
+                            {wf.status === 'success' && wf.latencyMs !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <TimingDisplay ms={wf.latencyMs} showLabel={false} />
+                                <span style={{ color: 'var(--success)' }}>{wf.visasSent}v</span>
+                              </div>
+                            )}
+                            {wf.status === 'error' && <span style={{ color: 'var(--error)', fontSize: '10px' }}>{wf.errorCode}</span>}
+                            {wf.status === 'running' && (
+                              <span className="flex items-center gap-1" style={{ color: 'var(--accent)' }}>
+                                <LoadingSpinner size={10} />
+                                <span style={{ fontSize: '10px' }}>In progress</span>
+                              </span>
+                            )}
+                            {(wf.status === 'pending' || wf.status === 'cancelled') && <span style={{ color: 'var(--muted-foreground)', fontSize: '10px' }}>—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            {(wf.status === 'pending' || wf.status === 'running') && (
+                              <>
+                                {confirmCancelId === wf.id ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <button onClick={() => handleCancelWorkflow(wf.id)} disabled={cancellingId === wf.id} className="btn-danger px-2 py-1" style={{ fontSize: '11px' }}>
+                                      {cancellingId === wf.id ? <LoadingSpinner size={10} /> : 'Confirm'}
+                                    </button>
+                                    <button onClick={() => setConfirmCancelId(null)} className="btn-ghost px-2 py-1" style={{ fontSize: '11px' }}>Keep</button>
+                                  </div>
+                                ) : (
                                   <button
-                                    onClick={() => handleCancelWorkflow(wf.id)}
-                                    disabled={cancellingId === wf.id}
-                                    className="btn-danger px-2 py-1"
-                                    style={{ fontSize: '11px' }}
+                                    onClick={() => setConfirmCancelId(wf.id)}
+                                    className="btn-ghost px-2.5 py-1.5"
+                                    style={{ fontSize: '11px', color: 'var(--error)', borderColor: 'rgba(239,68,68,0.25)' }}
                                   >
-                                    {cancellingId === wf.id ? <LoadingSpinner size={10} /> : 'Confirm'}
+                                    <Icon name="XMarkIcon" size={12} /> Cancel
                                   </button>
-                                  <button
-                                    onClick={() => setConfirmCancelId(null)}
-                                    className="btn-ghost px-2 py-1"
-                                    style={{ fontSize: '11px' }}
-                                  >
-                                    Keep
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setConfirmCancelId(wf.id)}
-                                  className="btn-ghost px-2.5 py-1.5"
-                                  style={{ fontSize: '11px', color: 'var(--error)', borderColor: 'rgba(239,68,68,0.25)' }}
-                                  title={`Cancel workflow ${wf.id} — this cannot be undone`}
-                                >
-                                  <Icon name="XMarkIcon" size={12} />
-                                  Cancel
-                                </button>
-                              )}
-                            </>
-                          )}
-                          {(wf.status === 'success' || wf.status === 'error' || wf.status === 'cancelled') && (
-                            <span className="text-2xs font-mono" style={{ color: 'var(--muted-foreground)' }}>
-                              {mounted ? formatTimestamp(wf.completedAt ?? wf.createdAt) : '—'}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                                )}
+                              </>
+                            )}
+                            {(wf.status === 'success' || wf.status === 'error' || wf.status === 'cancelled') && (
+                              <span className="text-2xs font-mono" style={{ color: 'var(--muted-foreground)' }}>
+                                {mounted ? formatTimestamp(wf.completedAt ?? wf.createdAt) : '—'}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -670,51 +716,38 @@ export default function SchedulePanelContent() {
         </div>
       </div>
 
-      {/* Schedule configuration reference */}
-      <SectionCard
-        title="Workflow Configuration Reference"
-        description="How Cloudflare Workflow scheduling works in Toque"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            {
-              icon: 'ClockIcon',
-              title: 'Time Precision',
-              body: 'Target times are specified in HH:MM:SS.mmm format (UTC). The Cloudflare Worker will execute the visa send at the exact millisecond specified.',
-              accent: 'var(--accent)',
-            },
-            {
-              icon: 'ArrowPathIcon',
-              title: 'Pull Before Send',
-              body: 'When enabled, the workflow automatically runs a full credential refresh (auth token, captcha, entityId) immediately before executing the visa send. Recommended for schedules more than 30 minutes out.',
-              accent: 'var(--success)',
-            },
-            {
-              icon: 'ExclamationTriangleIcon',
-              title: 'Cancellation',
-              body: 'Pending workflows can be cancelled at any time before execution. Running workflows may have already sent visas — cancellation stops any retry logic but cannot reverse completed sends.',
-              accent: 'var(--warning)',
-            },
-          ].map(item => (
-            <div
-              key={`ref-${item.title}`}
-              className="p-4 rounded-lg"
-              style={{ backgroundColor: 'var(--input)', border: '1px solid var(--border)' }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div
-                  className="w-7 h-7 rounded flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: `${item.accent}18`, border: `1px solid ${item.accent}30` }}
-                >
-                  <Icon name={item.icon as Parameters<typeof Icon>[0]['name']} size={14} />
-                </div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>
-                  {item.title}
-                </p>
+      {/* CLI log */}
+      {cliLog.length > 0 && (
+        <div className="card-surface overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2">
+              <Icon name="CommandLineIcon" size={13} style={{ color: 'var(--accent)' }} />
+              <span className="text-xs font-semibold font-mono" style={{ color: 'var(--foreground)' }}>CLI Output</span>
+            </div>
+            <button onClick={() => setCliLog([])} className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Clear</button>
+          </div>
+          <div className="p-4 font-mono text-xs space-y-0.5 overflow-y-auto" style={{ backgroundColor: '#050508', maxHeight: '160px' }}>
+            {cliLog.map((line, i) => (
+              <div key={`sched-log-${i}`} style={{ color: line.startsWith('✓') ? 'var(--success)' : line.startsWith('✗') ? 'var(--error)' : line.startsWith('$') ? 'var(--accent)' : 'var(--muted-foreground)' }}>
+                {line}
               </div>
-              <p className="text-xs leading-relaxed" style={{ color: 'var(--muted-foreground)' }}>
-                {item.body}
-              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reference */}
+      <SectionCard title="CLI Command Reference" description="Toque bin commands mapped to this panel">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            { cmd: 'toque schedule create --group <id> --time HH:MM:SS.mmm --date YYYY-MM-DD --tz UTC --pull-before true --retry true --priority normal', http: 'POST /schedule/create', desc: 'Create a time-triggered visa send workflow' },
+            { cmd: 'toque schedule get', http: 'GET /schedule/get', desc: 'List all active and recent workflows' },
+            { cmd: 'toque schedule cancel <workflowId>', http: 'POST /schedule/cancel', desc: 'Cancel a pending or running workflow' },
+          ].map(item => (
+            <div key={item.cmd.slice(0, 20)} className="p-3 rounded-lg" style={{ backgroundColor: 'var(--input)', border: '1px solid var(--border)' }}>
+              <p className="font-mono text-xs font-bold mb-1 break-all" style={{ color: 'var(--accent)', fontSize: '10px' }}>$ {item.cmd}</p>
+              <p className="font-mono text-xs mb-1.5" style={{ color: 'var(--muted-foreground)' }}>→ {item.http}</p>
+              <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{item.desc}</p>
             </div>
           ))}
         </div>

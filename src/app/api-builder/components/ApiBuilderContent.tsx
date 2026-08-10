@@ -37,6 +37,25 @@ interface HistoryEntry {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+function getBaseUrl() {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('toque_base_url') || 'https://toque.vortex.name.ng';
+  }
+  return 'https://toque.vortex.name.ng';
+}
+
+function getAuthHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  const mode = localStorage.getItem('toque_auth_mode') || 'api-key';
+  if (mode === 'api-key') {
+    const key = localStorage.getItem('toque_api_key') || '';
+    return key ? { 'X-API-Key': key } : {};
+  } else {
+    const jwt = localStorage.getItem('toque_jwt') || '';
+    return jwt ? { 'Authorization': `Bearer ${jwt}` } : {};
+  }
+}
+
 const BASE_URL = 'https://toque.vortex.name.ng';
 
 const INITIAL_TEMPLATES: SavedTemplate[] = [
@@ -74,13 +93,49 @@ const INITIAL_TEMPLATES: SavedTemplate[] = [
     id: 'tpl-4',
     name: 'Send Visa',
     method: 'POST',
-    url: `${BASE_URL}/visa/send`,
+    url: `${BASE_URL}/send`,
     headers: [
       { key: 'Content-Type', value: 'application/json', enabled: true },
       { key: 'Authorization', value: 'Bearer <token>', enabled: true },
     ],
-    body: '{\n  "groupId": "GRP-001",\n  "pilgrims": []\n}',
+    body: '{\n  "groupId": "GRP-001"\n}',
     createdAt: '2026-08-10T07:03:00Z',
+  },
+  {
+    id: 'tpl-5',
+    name: 'Pull Pilgrims',
+    method: 'POST',
+    url: `${BASE_URL}/pull`,
+    headers: [{ key: 'Content-Type', value: 'application/json', enabled: true }],
+    body: '{\n  "groupId": "GRP-001"\n}',
+    createdAt: '2026-08-10T07:04:00Z',
+  },
+  {
+    id: 'tpl-6',
+    name: 'Schedule Create',
+    method: 'POST',
+    url: `${BASE_URL}/schedule/create`,
+    headers: [{ key: 'Content-Type', value: 'application/json', enabled: true }],
+    body: '{\n  "groupId": "GRP-001",\n  "targetTime": "14:30:00.000",\n  "targetDate": "2026-08-15",\n  "timezone": "UTC",\n  "pullBefore": true,\n  "retryOnFail": true,\n  "priority": "normal"\n}',
+    createdAt: '2026-08-10T07:05:00Z',
+  },
+  {
+    id: 'tpl-7',
+    name: 'Schedule Get',
+    method: 'GET',
+    url: `${BASE_URL}/schedule/get`,
+    headers: [{ key: 'Content-Type', value: 'application/json', enabled: true }],
+    body: '',
+    createdAt: '2026-08-10T07:06:00Z',
+  },
+  {
+    id: 'tpl-8',
+    name: 'CAPTCHA Status',
+    method: 'GET',
+    url: `${BASE_URL}/captcha/status`,
+    headers: [{ key: 'Content-Type', value: 'application/json', enabled: true }],
+    body: '',
+    createdAt: '2026-08-10T07:07:00Z',
   },
 ];
 
@@ -104,10 +159,7 @@ const METHOD_BG: Record<HttpMethod, string> = {
 
 function MethodBadge({ method }: { method: HttpMethod }) {
   return (
-    <span
-      className="text-2xs font-bold font-mono px-1.5 py-0.5 rounded"
-      style={{ color: METHOD_COLORS[method], backgroundColor: METHOD_BG[method] }}
-    >
+    <span className="text-2xs font-bold font-mono px-1.5 py-0.5 rounded" style={{ color: METHOD_COLORS[method], backgroundColor: METHOD_BG[method] }}>
       {method}
     </span>
   );
@@ -207,6 +259,8 @@ export default function ApiBuilderContent() {
     try {
       const enabledHeaders = headers.filter(h => h.enabled && h.key.trim());
       const headersObj: Record<string, string> = {};
+      // Inject toque auth headers automatically
+      Object.assign(headersObj, getAuthHeaders());
       enabledHeaders.forEach(h => { headersObj[h.key] = h.value; });
 
       const fetchOptions: RequestInit = {
