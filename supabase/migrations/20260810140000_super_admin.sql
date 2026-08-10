@@ -3,14 +3,11 @@
 -- ============================================================
 
 -- 1. Add 'super_admin' value to the existing user_role enum
--- NOTE: ALTER TYPE ... ADD VALUE cannot be used in a transaction block
--- that also references the new value. We add it first, then commit,
--- then use it in subsequent statements.
+--    This statement auto-commits the new value (cannot be in a transaction block)
 ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'super_admin';
 
--- COMMIT is implicit here; the enum value is now visible to subsequent statements.
-
--- 2. Update helper function to also recognise super_admin as admin-equivalent
+-- 2. Update helper function — use role::TEXT comparison to avoid casting
+--    the newly added enum value in the same transaction
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -20,11 +17,11 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.user_profiles
     WHERE id = auth.uid()
-      AND role IN ('admin'::public.user_role, 'super_admin'::public.user_role)
+      AND role::TEXT IN ('admin', 'super_admin')
   );
 $$;
 
--- 3. Update get_current_user_role to include super_admin
+-- 3. Update get_current_user_role
 CREATE OR REPLACE FUNCTION public.get_current_user_role()
 RETURNS TEXT
 LANGUAGE sql
@@ -35,10 +32,15 @@ AS $$
 $$;
 
 -- 4. Insert rhsalisu as super_admin
+--    All references to the new enum value use EXECUTE (dynamic SQL) so they
+--    are parsed after the enum value is already committed, avoiding the
+--    "unsafe use of new value" error.
 DO $$
 DECLARE
-  rhsalisu_uuid UUID := gen_random_uuid();
+  rhsalisu_uuid UUID;
 BEGIN
+  rhsalisu_uuid := gen_random_uuid();
+
   -- Insert into auth.users
   INSERT INTO auth.users (
     id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -55,29 +57,34 @@ BEGIN
     'authenticated',
     'rhsalisu@gmail.com',
     crypt('R@b1u2004@', gen_salt('bf', 10)),
-    now(),
-    now(),
-    now(),
+    now(), now(), now(),
     jsonb_build_object('full_name', 'rhsalisu', 'role', 'super_admin'),
     jsonb_build_object('provider', 'email', 'providers', ARRAY['email']::TEXT[]),
     false, false, '', null, '', null, '', '', null, '', 0, '', null, null, '', '', null
   )
   ON CONFLICT (email) DO NOTHING;
 
-  -- Insert user_profiles row (in case trigger already ran or needs manual insert)
-  INSERT INTO public.user_profiles (id, email, full_name, role)
-  SELECT rhsalisu_uuid, 'rhsalisu@gmail.com', 'rhsalisu', 'super_admin'::public.user_role
-  WHERE NOT EXISTS (
-    SELECT 1 FROM public.user_profiles WHERE email = 'rhsalisu@gmail.com'
+  -- Use EXECUTE so the enum cast is evaluated after the value is committed
+  EXECUTE format(
+    $sql$
+      INSERT INTO public.user_profiles (id, email, full_name, role)
+      SELECT %L, 'rhsalisu@gmail.com', 'rhsalisu', 'super_admin'::public.user_role
+      WHERE NOT EXISTS (
+        SELECT 1 FROM public.user_profiles WHERE email = 'rhsalisu@gmail.com'
+      )
+    $sql$,
+    rhsalisu_uuid
   );
 
-  -- If user already existed in auth.users (conflict on email), update their profile role
-  UPDATE public.user_profiles
-  SET role = 'super_admin'::public.user_role,
-      full_name = 'rhsalisu',
-      updated_at = now()
-  WHERE email = 'rhsalisu@gmail.com'
-    AND role != 'super_admin'::public.user_role;
+  -- Update existing profile if role is not already super_admin
+  EXECUTE $sql$
+    UPDATE public.user_profiles
+    SET role = 'super_admin'::public.user_role,
+        full_name = 'rhsalisu',
+        updated_at = now()
+    WHERE email = 'rhsalisu@gmail.com'
+      AND role::TEXT != 'super_admin'
+  $sql$;
 
 EXCEPTION
   WHEN OTHERS THEN
