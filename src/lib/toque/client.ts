@@ -30,6 +30,15 @@ export interface ToqueConfig {
   authMode: 'api-key' | 'jwt';
 }
 
+export type FailureCategory = 'timeout' | 'invalid_auth' | 'backend_down' | 'network' | 'client_error' | 'unknown';
+
+export interface RecoveryHint {
+  category: FailureCategory;
+  title: string;
+  hint: string;
+  action?: string;
+}
+
 export interface ToqueResponse<T = unknown> {
   ok: boolean;
   status: number;
@@ -37,6 +46,9 @@ export interface ToqueResponse<T = unknown> {
   error: string | null;
   latencyMs: number;
   cliCommand: string;
+  attempts?: number;
+  failureCategory?: FailureCategory;
+  recoveryHint?: RecoveryHint;
 }
 
 function getConfig(): ToqueConfig {
@@ -75,55 +87,199 @@ function buildProxyUrl(config: ToqueConfig, path: string): string {
   return `${proxyBase}/${cleanPath}?_target=${targetParam}`;
 }
 
+// ─── Failure Categorization ───────────────────────────────────────────────────
+
+function categorizeFailure(status: number, error: string | null, latencyMs: number): RecoveryHint {
+  const msg = (error || '').toLowerCase();
+
+  // Timeout: request took too long or timed out explicitly
+  if (latencyMs > 8000 || msg.includes('timeout') || msg.includes('timed out') || msg.includes('aborted')) {
+    return {
+      category: 'timeout',
+      title: 'Request Timed Out',
+      hint: 'The backend did not respond within the expected window. The container may be cold-starting or under heavy load.',
+      action: 'Wait 15–30 seconds and retry. If the issue persists, check container uptime via the Cloudflare dashboard.',
+    };
+  }
+
+  // Invalid auth: 401 / 403 or auth-related error messages
+  if (status === 401 || status === 403 || msg.includes('unauthorized') || msg.includes('forbidden') || msg.includes('invalid api key') || msg.includes('invalid token') || msg.includes('jwt') || msg.includes('api key')) {
+    return {
+      category: 'invalid_auth',
+      title: 'Authentication Failed',
+      hint: 'Your API key or JWT token was rejected by the backend. The credential may be expired, revoked, or incorrect.',
+      action: 'Verify your API key in the Connection Configuration panel. If using JWT, try "Refresh Token" to obtain a fresh credential.',
+    };
+  }
+
+  // Backend down: 502/503/504 or connection refused / failed to fetch
+  if (status === 502 || status === 503 || status === 504 || msg.includes('failed to fetch') || msg.includes('connection refused') || msg.includes('econnrefused') || msg.includes('network error') || msg.includes('fetch failed') || status === 0) {
+    return {
+      category: 'backend_down',
+      title: 'Backend Unreachable',
+      hint: 'The Toque Worker could not be reached. The service may be down, the base URL may be wrong, or a network issue is blocking the request.',
+      action: 'Check the base URL is correct and the Cloudflare Worker is deployed and running. Verify there are no firewall or DNS issues.',
+    };
+  }
+
+  // 4xx client errors (not auth)
+  if (status >= 400 && status < 500) {
+    return {
+      category: 'client_error',
+      title: 'Client Request Error',
+      hint: `The server returned HTTP ${status}. The request may be malformed or the endpoint may not exist.`,
+      action: 'Check the endpoint path and request body. Refer to the CLI Command Reference for correct usage.',
+    };
+  }
+
+  // 5xx server errors (not 502/503/504 already handled)
+  if (status >= 500) {
+    return {
+      category: 'backend_down',
+      title: 'Server Error',
+      hint: `The backend returned HTTP ${status}, indicating an internal server error.`,
+      action: 'Check the Toque Worker logs in the Cloudflare dashboard for details. The container may need a restart.',
+    };
+  }
+
+  return {
+    category: 'unknown',
+    title: 'Unknown Error',
+    hint: error || 'An unexpected error occurred.',
+    action: 'Check the base URL, API key, and network connectivity, then retry.',
+  };
+}
+
+// ─── Exponential Backoff Retry ────────────────────────────────────────────────
+
+interface RetryOptions {
+  maxAttempts?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+  retryOn?: (status: number, error: string | null) => boolean;
+}
+
+const DEFAULT_RETRY_OPTIONS: Required<RetryOptions> = {
+  maxAttempts: 3,
+  baseDelayMs: 400,
+  maxDelayMs: 5000,
+  retryOn: (status, error) => {
+    // Retry on network errors (status 0), 502, 503, 504, and timeouts
+    if (status === 0) return true;
+    if (status === 502 || status === 503 || status === 504) return true;
+    const msg = (error || '').toLowerCase();
+    if (msg.includes('timeout') || msg.includes('failed to fetch') || msg.includes('network error') || msg.includes('fetch failed')) return true;
+    return false;
+  },
+};
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function jitter(ms: number): number {
+  return ms + Math.floor(Math.random() * ms * 0.3);
+}
+
 async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  cliCommand?: string
+  cliCommand?: string,
+  retryOptions?: RetryOptions
 ): Promise<ToqueResponse<T>> {
   const config = getConfig();
   const url = buildProxyUrl(config, path);
-  const start = Date.now();
   const cmd = cliCommand || `toque ${path.replace(/\//g, ' ').trim()}`;
+  const opts: Required<RetryOptions> = { ...DEFAULT_RETRY_OPTIONS, ...retryOptions };
 
-  try {
-    const opts: RequestInit = {
-      method,
-      headers: buildHeaders(config),
-    };
-    if (body && !['GET', 'HEAD'].includes(method)) {
-      opts.body = JSON.stringify(body);
+  let lastResult: ToqueResponse<T> | null = null;
+
+  for (let attempt = 1; attempt <= opts.maxAttempts; attempt++) {
+    const start = Date.now();
+
+    try {
+      const fetchOpts: RequestInit = {
+        method,
+        headers: buildHeaders(config),
+        signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined,
+      };
+      if (body && !['GET', 'HEAD'].includes(method)) {
+        fetchOpts.body = JSON.stringify(body);
+      }
+
+      const res = await fetch(url, fetchOpts);
+      const latencyMs = Date.now() - start;
+
+      let data: T | null = null;
+      let error: string | null = null;
+
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        const json = await res.json();
+        if (res.ok) {
+          data = json as T;
+        } else {
+          error = json?.message || json?.error || `HTTP ${res.status}`;
+        }
+      } else {
+        const text = await res.text();
+        if (res.ok) {
+          data = text as unknown as T;
+        } else {
+          error = text || `HTTP ${res.status}`;
+        }
+      }
+
+      lastResult = {
+        ok: res.ok,
+        status: res.status,
+        data,
+        error,
+        latencyMs,
+        cliCommand: cmd,
+        attempts: attempt,
+      };
+
+      // Success — return immediately
+      if (res.ok) return lastResult;
+
+      // Check if we should retry
+      const shouldRetry = attempt < opts.maxAttempts && opts.retryOn(res.status, error);
+      if (!shouldRetry) {
+        const hint = categorizeFailure(res.status, error, latencyMs);
+        return { ...lastResult, failureCategory: hint.category, recoveryHint: hint };
+      }
+
+    } catch (err: unknown) {
+      const latencyMs = Date.now() - start;
+      const msg = err instanceof Error ? err.message : 'Network error';
+
+      lastResult = {
+        ok: false,
+        status: 0,
+        data: null,
+        error: msg,
+        latencyMs,
+        cliCommand: cmd,
+        attempts: attempt,
+      };
+
+      const shouldRetry = attempt < opts.maxAttempts && opts.retryOn(0, msg);
+      if (!shouldRetry) {
+        const hint = categorizeFailure(0, msg, latencyMs);
+        return { ...lastResult, failureCategory: hint.category, recoveryHint: hint };
+      }
     }
 
-    const res = await fetch(url, opts);
-    const latencyMs = Date.now() - start;
-
-    let data: T | null = null;
-    let error: string | null = null;
-
-    const ct = res.headers.get('content-type') || '';
-    if (ct.includes('application/json')) {
-      const json = await res.json();
-      if (res.ok) {
-        data = json as T;
-      } else {
-        error = json?.message || json?.error || `HTTP ${res.status}`;
-      }
-    } else {
-      const text = await res.text();
-      if (res.ok) {
-        data = text as unknown as T;
-      } else {
-        error = text || `HTTP ${res.status}`;
-      }
-    }
-
-    return { ok: res.ok, status: res.status, data, error, latencyMs, cliCommand: cmd };
-  } catch (err: unknown) {
-    const latencyMs = Date.now() - start;
-    const msg = err instanceof Error ? err.message : 'Network error';
-    return { ok: false, status: 0, data: null, error: msg, latencyMs, cliCommand: cmd };
+    // Exponential backoff with jitter before next attempt
+    const delay = jitter(Math.min(opts.baseDelayMs * Math.pow(2, attempt - 1), opts.maxDelayMs));
+    await sleep(delay);
   }
+
+  // Should not reach here, but satisfy TypeScript
+  const hint = categorizeFailure(lastResult!.status, lastResult!.error, lastResult!.latencyMs);
+  return { ...lastResult!, failureCategory: hint.category, recoveryHint: hint };
 }
 
 // ─── Health ──────────────────────────────────────────────────────────────────

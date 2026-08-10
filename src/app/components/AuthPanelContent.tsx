@@ -16,6 +16,7 @@ import {
   toqueAuthPing,
   toqueAuthRefresh,
   type HealthResponse,
+  type RecoveryHint,
 } from '@/lib/toque/client';
 
 type AuthMode = 'api-key' | 'jwt';
@@ -37,6 +38,8 @@ export default function AuthPanelContent() {
   const [isTesting, setIsTesting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
+  const [recoveryHint, setRecoveryHint] = useState<RecoveryHint | null>(null);
+  const [testAttempts, setTestAttempts] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [lastTestedAt, setLastTestedAt] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -75,6 +78,8 @@ export default function AuthPanelContent() {
   const handleTestConnection = async () => {
     setIsTesting(true);
     setTestError(null);
+    setRecoveryHint(null);
+    setTestAttempts(0);
     setConnectionStatus('checking');
     setCliLog([]);
 
@@ -83,6 +88,10 @@ export default function AuthPanelContent() {
 
     const result = await toqueHealth();
     setTestLatency(result.latencyMs);
+    if (result.attempts && result.attempts > 1) {
+      appendLog(`  ↻ Retried ${result.attempts - 1}x with exponential backoff`);
+    }
+    setTestAttempts(result.attempts ?? 1);
 
     if (result.ok && result.data) {
       setConnectionStatus('connected');
@@ -96,8 +105,13 @@ export default function AuthPanelContent() {
       setConnectionStatus('disconnected');
       const errMsg = result.error || `HTTP ${result.status}`;
       setTestError(`GET /health → ${result.status || 'ERR'}: ${errMsg}. Check base URL and API key.`);
+      if (result.recoveryHint) setRecoveryHint(result.recoveryHint);
       localStorage.setItem('toque_connection_status', 'disconnected');
       appendLog(`✗ GET /health → ${result.status || 'ERR'}: ${errMsg}`);
+      if (result.recoveryHint) {
+        appendLog(`  ⚑ [${result.recoveryHint.category}] ${result.recoveryHint.title}`);
+        appendLog(`  → ${result.recoveryHint.action || result.recoveryHint.hint}`);
+      }
       toast.error('Connection failed — see error details below');
     }
 
@@ -342,11 +356,41 @@ export default function AuthPanelContent() {
               </div>
 
               {testError && (
-                <ErrorAlert
-                  message="Connection failed"
-                  detail={testError}
-                  onRetry={handleTestConnection}
-                />
+                <div className="space-y-3">
+                  <ErrorAlert
+                    message="Connection failed"
+                    detail={testError}
+                    onRetry={handleTestConnection}
+                  />
+                  {testAttempts > 1 && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono" style={{ backgroundColor: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: 'var(--warning)' }}>
+                      <Icon name="ArrowPathIcon" size={12} />
+                      <span>Retried {testAttempts - 1}× with exponential backoff — all attempts failed</span>
+                    </div>
+                  )}
+                  {recoveryHint && (
+                    <div className="rounded-lg p-3 space-y-2" style={{ backgroundColor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-2xs font-semibold uppercase tracking-wider"
+                          style={{
+                            backgroundColor: recoveryHint.category === 'timeout' ? 'rgba(245,158,11,0.15)' : recoveryHint.category === 'invalid_auth' ? 'rgba(168,85,247,0.15)' : 'rgba(239,68,68,0.15)',
+                            color: recoveryHint.category === 'timeout' ? 'var(--warning)' : recoveryHint.category === 'invalid_auth' ? '#a855f7' : 'var(--error)',
+                          }}>
+                          <Icon name={recoveryHint.category === 'timeout' ? 'ClockIcon' : recoveryHint.category === 'invalid_auth' ? 'KeyIcon' : 'ExclamationTriangleIcon'} size={10} />
+                          {recoveryHint.category.replace('_', ' ')}
+                        </span>
+                        <span className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>{recoveryHint.title}</span>
+                      </div>
+                      <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{recoveryHint.hint}</p>
+                      {recoveryHint.action && (
+                        <div className="flex items-start gap-2 pt-1">
+                          <Icon name="LightBulbIcon" size={12} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
+                          <p className="text-xs font-medium" style={{ color: 'var(--accent)' }}>{recoveryHint.action}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* CLI log */}
