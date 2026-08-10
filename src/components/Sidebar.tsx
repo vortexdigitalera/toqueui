@@ -81,7 +81,26 @@ export default function Sidebar({ collapsed, onToggle, activeRoute }: SidebarPro
   };
 
   useEffect(() => {
-    if (auditOpen) fetchAuditLogs();
+    if (!auditOpen) return;
+
+    fetchAuditLogs();
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel('sidebar-audit-logs')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'audit_logs' },
+        (payload) => {
+          const newEntry = payload.new as AuditEntry;
+          setAuditLogs(prev => [newEntry, ...prev].slice(0, 20));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [auditOpen]);
 
   const formatTime = (iso: string) => {

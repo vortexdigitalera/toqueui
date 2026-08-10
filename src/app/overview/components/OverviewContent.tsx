@@ -216,6 +216,22 @@ export default function OverviewContent() {
     };
 
     fetchData();
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel('overview-audit-logs')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'audit_logs' },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const formatTime = (iso: string) => {
