@@ -3,7 +3,15 @@
 export type UserRole = 'super_admin' | 'admin' | 'operator' | 'viewer';
 
 export type Panel =
-  | 'send-visa' |'schedule' |'captcha' |'benchmarking' |'pulling' |'network' |'api-builder' |'dashboard' |'team-management';
+  | 'send-visa'
+  | 'schedule'
+  | 'captcha'
+  | 'benchmarking'
+  | 'pulling'
+  | 'network'
+  | 'api-builder'
+  | 'dashboard'
+  | 'team-management';
 
 // Panel access matrix: which roles can access each panel
 export const PANEL_PERMISSIONS: Record<Panel, UserRole[]> = {
@@ -43,6 +51,6 @@ export function canAccessPanel(role: UserRole | null | undefined, panel: Panel):
 
 export function getAccessDeniedMessage(role: UserRole | null | undefined, panel: Panel): string {
   const roleLabel = role ? ROLE_LABELS[role] : 'Unknown';
-  const allowed = PANEL_PERMISSIONS[panel]?.map(r => ROLE_LABELS[r]).join(', ') ?? '';
+  const allowed = PANEL_PERMISSIONS[panel]?.map((r) => ROLE_LABELS[r]).join(', ') ?? '';
   return `Access denied. The "${panel}" panel requires: ${allowed}. Your role: ${roleLabel}.`;
 }
