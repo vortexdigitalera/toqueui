@@ -11,7 +11,14 @@ interface ToggleProps {
   id?: string;
 }
 
-export default function Toggle({ checked, onChange, label, description, disabled = false, id }: ToggleProps) {
+export default function Toggle({
+  checked,
+  onChange,
+  label,
+  description,
+  disabled = false,
+  id,
+}: ToggleProps) {
   const toggleId = id ?? `toggle-${label?.toLowerCase().replace(/\s+/g, '-') ?? 'switch'}`;
 
   return (

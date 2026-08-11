@@ -32,10 +32,7 @@ export default function JsonViewer({ data, maxHeight = 320, title }: JsonViewerP
 
   const jsonString = JSON.stringify(data, null, 2);
   const highlighted = syntaxHighlight(
-    jsonString
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
+    jsonString.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   );
 
   const handleCopy = async () => {
@@ -57,9 +54,18 @@ export default function JsonViewer({ data, maxHeight = 320, title }: JsonViewerP
         style={{ backgroundColor: '#0d0d14', borderBottom: '1px solid var(--border)' }}
       >
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ff5f57' }} />
-          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ffbd2e' }} />
-          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#28c940' }} />
+          <span
+            className="inline-block w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: '#ff5f57' }}
+          />
+          <span
+            className="inline-block w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: '#ffbd2e' }}
+          />
+          <span
+            className="inline-block w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: '#28c940' }}
+          />
           {title && (
             <span className="ml-2 font-mono text-xs" style={{ color: 'var(--muted-foreground)' }}>
               {title}

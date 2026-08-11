@@ -74,7 +74,9 @@ export default function TeamManagementContent() {
     try {
       const { data, error: err } = await supabase
         .from('user_profiles')
-        .select('id, email, full_name, role, suspended_at, suspension_reason, permissions, created_at')
+        .select(
+          'id, email, full_name, role, suspended_at, suspension_reason, permissions, created_at'
+        )
         .order('created_at', { ascending: false });
       if (err) throw err;
       setMembers((data as TeamMember[]) ?? []);
@@ -180,7 +182,11 @@ export default function TeamManagementContent() {
     try {
       const update = isSuspended
         ? { suspended_at: null, suspended_by: null, suspension_reason: null }
-        : { suspended_at: new Date().toISOString(), suspended_by: user?.id, suspension_reason: suspendReason || null };
+        : {
+            suspended_at: new Date().toISOString(),
+            suspended_by: user?.id,
+            suspension_reason: suspendReason || null,
+          };
       const { error: err } = await supabase
         .from('user_profiles')
         .update(update)
@@ -190,7 +196,9 @@ export default function TeamManagementContent() {
         target_email: selectedMember.email,
         reason: suspendReason || null,
       });
-      showSuccess(isSuspended ? `${selectedMember.email} reactivated` : `${selectedMember.email} suspended`);
+      showSuccess(
+        isSuspended ? `${selectedMember.email} reactivated` : `${selectedMember.email} suspended`
+      );
       closeModal();
       fetchMembers();
     } catch (e: any) {
@@ -274,18 +282,41 @@ export default function TeamManagementContent() {
 
       {/* Alerts */}
       {error && (
-        <div className="rounded-lg border px-4 py-3 text-sm flex items-start gap-2"
-          style={{ backgroundColor: 'var(--error, #ef4444)15', borderColor: 'var(--error, #ef4444)40', color: '#f87171' }}>
-          <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        <div
+          className="rounded-lg border px-4 py-3 text-sm flex items-start gap-2"
+          style={{
+            backgroundColor: 'var(--error, #ef4444)15',
+            borderColor: 'var(--error, #ef4444)40',
+            color: '#f87171',
+          }}
+        >
+          <svg
+            className="w-4 h-4 mt-0.5 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+            />
           </svg>
           {error}
         </div>
       )}
       {success && (
-        <div className="rounded-lg border px-4 py-3 text-sm flex items-start gap-2"
-          style={{ backgroundColor: '#22c55e15', borderColor: '#22c55e40', color: '#4ade80' }}>
-          <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div
+          className="rounded-lg border px-4 py-3 text-sm flex items-start gap-2"
+          style={{ backgroundColor: '#22c55e15', borderColor: '#22c55e40', color: '#4ade80' }}
+        >
+          <svg
+            className="w-4 h-4 mt-0.5 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
           {success}
@@ -293,12 +324,20 @@ export default function TeamManagementContent() {
       )}
 
       {/* Members Table */}
-      <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-        <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
+      <div
+        className="rounded-xl border overflow-hidden"
+        style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
+      >
+        <div
+          className="px-5 py-3.5 flex items-center justify-between"
+          style={{ borderBottom: '1px solid var(--border)' }}
+        >
           <span className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>
             Team Members
-            <span className="ml-2 px-1.5 py-0.5 rounded text-xs font-mono"
-              style={{ backgroundColor: 'var(--accent)20', color: 'var(--accent)' }}>
+            <span
+              className="ml-2 px-1.5 py-0.5 rounded text-xs font-mono"
+              style={{ backgroundColor: 'var(--accent)20', color: 'var(--accent)' }}
+            >
               {members.length}
             </span>
           </span>
@@ -317,9 +356,18 @@ export default function TeamManagementContent() {
           </div>
         ) : members.length === 0 ? (
           <div className="text-center py-16" style={{ color: 'var(--muted-foreground)' }}>
-            <svg className="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            <svg
+              className="w-10 h-10 mx-auto mb-3 opacity-40"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+              />
             </svg>
             <p className="text-sm">No team members found</p>
           </div>
@@ -327,10 +375,18 @@ export default function TeamManagementContent() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'var(--background)' }}>
-                  {['User', 'Role', 'Status', 'Joined', 'Actions'].map(h => (
-                    <th key={h} className="px-5 py-3 text-left font-semibold text-xs uppercase tracking-wider"
-                      style={{ color: 'var(--muted-foreground)' }}>
+                <tr
+                  style={{
+                    borderBottom: '1px solid var(--border)',
+                    backgroundColor: 'var(--background)',
+                  }}
+                >
+                  {['User', 'Role', 'Status', 'Joined', 'Actions'].map((h) => (
+                    <th
+                      key={h}
+                      className="px-5 py-3 text-left font-semibold text-xs uppercase tracking-wider"
+                      style={{ color: 'var(--muted-foreground)' }}
+                    >
                       {h}
                     </th>
                   ))}
@@ -354,17 +410,25 @@ export default function TeamManagementContent() {
                           {(m.full_name || m.email).charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium truncate" style={{ color: 'var(--foreground)' }}>
+                          <p
+                            className="font-medium truncate"
+                            style={{ color: 'var(--foreground)' }}
+                          >
                             {m.full_name || '—'}
                           </p>
-                          <p className="text-xs truncate" style={{ color: 'var(--muted-foreground)' }}>
+                          <p
+                            className="text-xs truncate"
+                            style={{ color: 'var(--muted-foreground)' }}
+                          >
                             {m.email}
                           </p>
                         </div>
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${ROLE_COLORS[m.role]}`}>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${ROLE_COLORS[m.role]}`}
+                      >
                         <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
                         {ROLE_LABELS[m.role]}
                       </span>
@@ -383,7 +447,10 @@ export default function TeamManagementContent() {
                       )}
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="text-xs font-mono" style={{ color: 'var(--muted-foreground)' }}>
+                      <span
+                        className="text-xs font-mono"
+                        style={{ color: 'var(--muted-foreground)' }}
+                      >
                         {formatDate(m.created_at)}
                       </span>
                     </td>
@@ -405,14 +472,19 @@ export default function TeamManagementContent() {
                           />
                           <ActionBtn
                             label={m.suspended_at ? 'Activate' : 'Suspend'}
-                            icon={m.suspended_at
-                              ? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" :"M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"}
+                            icon={
+                              m.suspended_at
+                                ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+                                : 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636'
+                            }
                             onClick={() => openSuspend(m)}
                             color={m.suspended_at ? 'text-green-400' : 'text-red-400'}
                           />
                         </div>
                       ) : (
-                        <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>You</span>
+                        <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                          You
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -428,7 +500,9 @@ export default function TeamManagementContent() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
-          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeModal();
+          }}
         >
           <div
             className="w-full max-w-md rounded-xl border shadow-2xl"
@@ -443,7 +517,7 @@ export default function TeamManagementContent() {
                     <input
                       type="text"
                       value={newName}
-                      onChange={e => setNewName(e.target.value)}
+                      onChange={(e) => setNewName(e.target.value)}
                       placeholder="Jane Smith"
                       required
                       className="input-field w-full"
@@ -453,7 +527,7 @@ export default function TeamManagementContent() {
                     <input
                       type="email"
                       value={newEmail}
-                      onChange={e => setNewEmail(e.target.value)}
+                      onChange={(e) => setNewEmail(e.target.value)}
                       placeholder="jane@example.com"
                       required
                       className="input-field w-full"
@@ -463,7 +537,7 @@ export default function TeamManagementContent() {
                     <input
                       type="password"
                       value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
+                      onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Min. 8 characters"
                       minLength={8}
                       required
@@ -475,7 +549,13 @@ export default function TeamManagementContent() {
                   </Field>
                   {error && <p className="text-xs text-red-400">{error}</p>}
                 </div>
-                <ModalFooter onClose={closeModal} onConfirm={undefined} confirmLabel="Create Account" loading={creating} isSubmit />
+                <ModalFooter
+                  onClose={closeModal}
+                  onConfirm={undefined}
+                  confirmLabel="Create Account"
+                  loading={creating}
+                  isSubmit
+                />
               </form>
             )}
 
@@ -485,14 +565,20 @@ export default function TeamManagementContent() {
                 <ModalHeader title="Change Role" onClose={closeModal} />
                 <div className="p-5 space-y-4">
                   <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
-                    Changing role for <strong style={{ color: 'var(--foreground)' }}>{selectedMember.email}</strong>
+                    Changing role for{' '}
+                    <strong style={{ color: 'var(--foreground)' }}>{selectedMember.email}</strong>
                   </p>
                   <Field label="New Role">
                     <RoleSelect value={editRole} onChange={setEditRole} />
                   </Field>
                   {error && <p className="text-xs text-red-400">{error}</p>}
                 </div>
-                <ModalFooter onClose={closeModal} onConfirm={handleRoleChange} confirmLabel="Save Role" loading={saving} />
+                <ModalFooter
+                  onClose={closeModal}
+                  onConfirm={handleRoleChange}
+                  confirmLabel="Save Role"
+                  loading={saving}
+                />
               </div>
             )}
 
@@ -506,18 +592,24 @@ export default function TeamManagementContent() {
                 <div className="p-5 space-y-4">
                   {selectedMember.suspended_at ? (
                     <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
-                      Reactivate <strong style={{ color: 'var(--foreground)' }}>{selectedMember.email}</strong>? They will regain access to their assigned panels.
+                      Reactivate{' '}
+                      <strong style={{ color: 'var(--foreground)' }}>{selectedMember.email}</strong>
+                      ? They will regain access to their assigned panels.
                     </p>
                   ) : (
                     <>
                       <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
-                        Suspend <strong style={{ color: 'var(--foreground)' }}>{selectedMember.email}</strong>? They will lose access immediately.
+                        Suspend{' '}
+                        <strong style={{ color: 'var(--foreground)' }}>
+                          {selectedMember.email}
+                        </strong>
+                        ? They will lose access immediately.
                       </p>
                       <Field label="Reason (optional)">
                         <input
                           type="text"
                           value={suspendReason}
-                          onChange={e => setSuspendReason(e.target.value)}
+                          onChange={(e) => setSuspendReason(e.target.value)}
                           placeholder="Policy violation, inactivity…"
                           className="input-field w-full"
                         />
@@ -542,17 +634,21 @@ export default function TeamManagementContent() {
                 <ModalHeader title="Manage Panel Permissions" onClose={closeModal} />
                 <div className="p-5 space-y-3">
                   <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
-                    Override panel access for <strong style={{ color: 'var(--foreground)' }}>{selectedMember.email}</strong>.
+                    Override panel access for{' '}
+                    <strong style={{ color: 'var(--foreground)' }}>{selectedMember.email}</strong>.
                     These override role defaults.
                   </p>
                   <div className="space-y-2 mt-3">
-                    {PANEL_KEYS.map(panel => (
+                    {PANEL_KEYS.map((panel) => (
                       <label
                         key={panel}
                         className="flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors hover:bg-white/5"
                         style={{ border: '1px solid var(--border)' }}
                       >
-                        <span className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>
+                        <span
+                          className="text-sm font-medium"
+                          style={{ color: 'var(--foreground)' }}
+                        >
                           {PANEL_LABELS[panel]}
                         </span>
                         <div className="relative">
@@ -560,7 +656,9 @@ export default function TeamManagementContent() {
                             type="checkbox"
                             className="sr-only"
                             checked={editPerms[panel] ?? false}
-                            onChange={e => setEditPerms(prev => ({ ...prev, [panel]: e.target.checked }))}
+                            onChange={(e) =>
+                              setEditPerms((prev) => ({ ...prev, [panel]: e.target.checked }))
+                            }
                           />
                           <div
                             className="w-9 h-5 rounded-full transition-colors"
@@ -570,7 +668,11 @@ export default function TeamManagementContent() {
                           >
                             <div
                               className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-                              style={{ transform: editPerms[panel] ? 'translateX(18px)' : 'translateX(2px)' }}
+                              style={{
+                                transform: editPerms[panel]
+                                  ? 'translateX(18px)'
+                                  : 'translateX(2px)',
+                              }}
                             />
                           </div>
                         </div>
@@ -579,7 +681,12 @@ export default function TeamManagementContent() {
                   </div>
                   {error && <p className="text-xs text-red-400">{error}</p>}
                 </div>
-                <ModalFooter onClose={closeModal} onConfirm={handleSavePermissions} confirmLabel="Save Permissions" loading={saving} />
+                <ModalFooter
+                  onClose={closeModal}
+                  onConfirm={handleSavePermissions}
+                  confirmLabel="Save Permissions"
+                  loading={saving}
+                />
               </div>
             )}
           </div>
@@ -591,7 +698,17 @@ export default function TeamManagementContent() {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function ActionBtn({ label, icon, onClick, color }: { label: string; icon: string; onClick: () => void; color: string }) {
+function ActionBtn({
+  label,
+  icon,
+  onClick,
+  color,
+}: {
+  label: string;
+  icon: string;
+  onClick: () => void;
+  color: string;
+}) {
   return (
     <button
       onClick={onClick}
@@ -608,15 +725,25 @@ function ActionBtn({ label, icon, onClick, color }: { label: string; icon: strin
 
 function ModalHeader({ title, onClose }: { title: string; onClose: () => void }) {
   return (
-    <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-      <h2 className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>{title}</h2>
+    <div
+      className="flex items-center justify-between px-5 py-4"
+      style={{ borderBottom: '1px solid var(--border)' }}
+    >
+      <h2 className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>
+        {title}
+      </h2>
       <button
         onClick={onClose}
         className="p-1 rounded transition-colors hover:bg-white/10"
         style={{ color: 'var(--muted-foreground)' }}
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M6 18L18 6M6 6l12 12"
+          />
         </svg>
       </button>
     </div>
@@ -624,7 +751,12 @@ function ModalHeader({ title, onClose }: { title: string; onClose: () => void })
 }
 
 function ModalFooter({
-  onClose, onConfirm, confirmLabel, loading, danger, isSubmit,
+  onClose,
+  onConfirm,
+  confirmLabel,
+  loading,
+  danger,
+  isSubmit,
 }: {
   onClose: () => void;
   onConfirm?: () => void;
@@ -634,7 +766,10 @@ function ModalFooter({
   isSubmit?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-end gap-2 px-5 py-4" style={{ borderTop: '1px solid var(--border)' }}>
+    <div
+      className="flex items-center justify-end gap-2 px-5 py-4"
+      style={{ borderTop: '1px solid var(--border)' }}
+    >
       <button
         type="button"
         onClick={onClose}
@@ -658,7 +793,9 @@ function ModalFooter({
             <span className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" />
             {confirmLabel}
           </span>
-        ) : confirmLabel}
+        ) : (
+          confirmLabel
+        )}
       </button>
     </div>
   );
@@ -667,7 +804,10 @@ function ModalFooter({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted-foreground)' }}>
+      <label
+        className="block text-xs font-semibold uppercase tracking-wider"
+        style={{ color: 'var(--muted-foreground)' }}
+      >
         {label}
       </label>
       {children}
@@ -679,7 +819,7 @@ function RoleSelect({ value, onChange }: { value: UserRole; onChange: (r: UserRo
   return (
     <select
       value={value}
-      onChange={e => onChange(e.target.value as UserRole)}
+      onChange={(e) => onChange(e.target.value as UserRole)}
       className="input-field w-full"
     >
       <option value="admin">Admin — Full access</option>

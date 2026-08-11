@@ -17,7 +17,12 @@ export default function ErrorAlert({ message, detail, onRetry }: ErrorAlertProps
       }}
       role="alert"
     >
-      <Icon name="ExclamationTriangleIcon" size={16} className="shrink-0 mt-0.5" style={{ color: 'var(--error)' } as React.CSSProperties} />
+      <Icon
+        name="ExclamationTriangleIcon"
+        size={16}
+        className="shrink-0 mt-0.5"
+        style={{ color: 'var(--error)' } as React.CSSProperties}
+      />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold" style={{ color: 'var(--error)' }}>
           {message}

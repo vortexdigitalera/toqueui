@@ -20,7 +20,11 @@ export default function SectionCard({
   return (
     <div
       className={`card-surface ${className}`}
-      style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}
+      style={{
+        backgroundColor: 'var(--card)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
+      }}
     >
       {(title || headerRight) && (
         <div
