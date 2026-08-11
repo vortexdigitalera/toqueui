@@ -21,15 +21,71 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Home', href: '/', icon: 'HomeIcon', group: 'Navigation' },
   { label: 'Overview', href: '/overview', icon: 'Squares2X2Icon', group: 'Navigation' },
-  { label: 'Authentication', href: '/dashboard', icon: 'KeyIcon', group: 'Operations', panel: 'dashboard' },
-  { label: 'Send Visa', href: '/send-visa-panel', icon: 'PaperAirplaneIcon', group: 'Operations', panel: 'send-visa' },
-  { label: 'Schedule', href: '/schedule-panel', icon: 'ClockIcon', badge: 2, badgeVariant: 'primary', group: 'Operations', panel: 'schedule' },
-  { label: 'Pulling', href: '/pulling-panel', icon: 'ArrowDownTrayIcon', group: 'Operations', panel: 'pulling' },
-  { label: 'Captcha', href: '/captcha-panel', icon: 'ShieldCheckIcon', group: 'Operations', panel: 'captcha' },
-  { label: 'Network', href: '/network-panel', icon: 'SignalIcon', group: 'Monitoring', panel: 'network' },
-  { label: 'Benchmarking', href: '/benchmarking-panel', icon: 'ChartBarIcon', group: 'Monitoring', panel: 'benchmarking' },
-  { label: 'API Builder', href: '/api-builder', icon: 'CodeBracketIcon', group: 'Developer', panel: 'api-builder' },
-  { label: 'Team', href: '/team-management', icon: 'UsersIcon', group: 'Admin', panel: 'team-management' },
+  {
+    label: 'Authentication',
+    href: '/dashboard',
+    icon: 'KeyIcon',
+    group: 'Operations',
+    panel: 'dashboard',
+  },
+  {
+    label: 'Send Visa',
+    href: '/send-visa-panel',
+    icon: 'PaperAirplaneIcon',
+    group: 'Operations',
+    panel: 'send-visa',
+  },
+  {
+    label: 'Schedule',
+    href: '/schedule-panel',
+    icon: 'ClockIcon',
+    badge: 2,
+    badgeVariant: 'primary',
+    group: 'Operations',
+    panel: 'schedule',
+  },
+  {
+    label: 'Pulling',
+    href: '/pulling-panel',
+    icon: 'ArrowDownTrayIcon',
+    group: 'Operations',
+    panel: 'pulling',
+  },
+  {
+    label: 'Captcha',
+    href: '/captcha-panel',
+    icon: 'ShieldCheckIcon',
+    group: 'Operations',
+    panel: 'captcha',
+  },
+  {
+    label: 'Network',
+    href: '/network-panel',
+    icon: 'SignalIcon',
+    group: 'Monitoring',
+    panel: 'network',
+  },
+  {
+    label: 'Benchmarking',
+    href: '/benchmarking-panel',
+    icon: 'ChartBarIcon',
+    group: 'Monitoring',
+    panel: 'benchmarking',
+  },
+  {
+    label: 'API Builder',
+    href: '/api-builder',
+    icon: 'CodeBracketIcon',
+    group: 'Developer',
+    panel: 'api-builder',
+  },
+  {
+    label: 'Team',
+    href: '/team-management',
+    icon: 'UsersIcon',
+    group: 'Admin',
+    panel: 'team-management',
+  },
   { label: 'Login', href: '/login', icon: 'ArrowRightOnRectangleIcon', group: 'Access' },
 ];
 
@@ -53,15 +109,16 @@ interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   activeRoute: string;
+  onNavigate?: () => void;
 }
 
-export default function Sidebar({ collapsed, onToggle, activeRoute }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, activeRoute, onNavigate }: SidebarProps) {
   const { userRole } = useAuth();
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
 
-  const groups = Array.from(new Set(NAV_ITEMS.map(i => i.group)));
+  const groups = Array.from(new Set(NAV_ITEMS.map((i) => i.group)));
 
   const fetchAuditLogs = async () => {
     setAuditLoading(true);
@@ -93,7 +150,7 @@ export default function Sidebar({ collapsed, onToggle, activeRoute }: SidebarPro
         { event: 'INSERT', schema: 'public', table: 'audit_logs' },
         (payload) => {
           const newEntry = payload.new as AuditEntry;
-          setAuditLogs(prev => [newEntry, ...prev].slice(0, 20));
+          setAuditLogs((prev) => [newEntry, ...prev].slice(0, 20));
         }
       )
       .subscribe();
@@ -147,10 +204,7 @@ export default function Sidebar({ collapsed, onToggle, activeRoute }: SidebarPro
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           style={{ marginLeft: collapsed ? 'auto' : '0' }}
         >
-          <Icon
-            name={collapsed ? 'Bars3Icon' : 'ChevronDoubleLeftIcon'}
-            size={16}
-          />
+          <Icon name={collapsed ? 'Bars3Icon' : 'ChevronDoubleLeftIcon'} size={16} />
         </button>
       </div>
 
@@ -168,37 +222,52 @@ export default function Sidebar({ collapsed, onToggle, activeRoute }: SidebarPro
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-3 overflow-y-auto overflow-x-hidden">
-        {groups.map(group => {
-          const groupItems = NAV_ITEMS.filter(i => i.group === group);
+        {groups.map((group) => {
+          const groupItems = NAV_ITEMS.filter((i) => i.group === group);
           return (
             <div key={group} className="mb-3">
               {!collapsed && (
                 <p
                   className="px-2 mb-1.5 uppercase tracking-widest font-semibold"
-                  style={{ fontSize: '10px', color: 'var(--muted-foreground)', letterSpacing: '0.1em' }}
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--muted-foreground)',
+                    letterSpacing: '0.1em',
+                  }}
                 >
                   {group}
                 </p>
               )}
               <ul className="space-y-0.5 list-none p-0 m-0">
-                {groupItems.map(item => {
+                {groupItems.map((item) => {
                   const isActive = activeRoute === item.href;
                   const hasPanel = !!item.panel;
-                  const allowed = hasPanel && userRole !== null ? canAccessPanel(userRole, item.panel as Panel) : true;
+                  const allowed =
+                    hasPanel && userRole !== null
+                      ? canAccessPanel(userRole, item.panel as Panel)
+                      : true;
                   return (
                     <li key={`nav-${item.href}`}>
                       <Link
                         href={item.href}
                         title={collapsed ? item.label : undefined}
+                        onClick={() => onNavigate?.()}
                         className={`sidebar-item ${isActive ? 'active' : ''} ${!allowed ? 'opacity-40 pointer-events-none' : ''}`}
                         style={{ fontSize: '13px', fontWeight: isActive ? 600 : 400 }}
                         aria-disabled={!allowed}
                         tabIndex={!allowed ? -1 : undefined}
                       >
                         <span className="shrink-0 relative">
-                          <Icon name={item.icon as Parameters<typeof Icon>[0]['name']} size={18} variant={isActive ? 'solid' : 'outline'} />
+                          <Icon
+                            name={item.icon as Parameters<typeof Icon>[0]['name']}
+                            size={18}
+                            variant={isActive ? 'solid' : 'outline'}
+                          />
                           {!allowed && !collapsed && (
-                            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" title="Restricted" />
+                            <span
+                              className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500"
+                              title="Restricted"
+                            />
                           )}
                         </span>
                         {!collapsed && (
@@ -207,7 +276,11 @@ export default function Sidebar({ collapsed, onToggle, activeRoute }: SidebarPro
                             {!allowed && (
                               <span className="text-red-400 shrink-0" title="Access restricted">
                                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                                    clipRule="evenodd"
+                                  />
                                 </svg>
                               </span>
                             )}
@@ -233,25 +306,38 @@ export default function Sidebar({ collapsed, onToggle, activeRoute }: SidebarPro
       {/* Audit Log section */}
       <div style={{ borderTop: '1px solid var(--border)' }}>
         <button
-          onClick={() => setAuditOpen(prev => !prev)}
+          onClick={() => setAuditOpen((prev) => !prev)}
           className="w-full flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-white/5"
           title={collapsed ? 'Audit Log' : undefined}
           style={{ color: 'var(--muted-foreground)' }}
         >
           <span className="shrink-0">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
             </svg>
           </span>
           {!collapsed && (
             <>
-              <span className="flex-1 text-left text-xs font-semibold uppercase tracking-wider">Audit Log</span>
+              <span className="flex-1 text-left text-xs font-semibold uppercase tracking-wider">
+                Audit Log
+              </span>
               <svg
                 className={`w-3 h-3 transition-transform ${auditOpen ? 'rotate-180' : ''}`}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </>
           )}
@@ -272,22 +358,30 @@ export default function Sidebar({ collapsed, onToggle, activeRoute }: SidebarPro
               </p>
             ) : (
               <ul className="space-y-1 list-none p-0 m-0">
-                {auditLogs.map(entry => (
+                {auditLogs.map((entry) => (
                   <li
                     key={entry.id}
                     className="rounded-md px-2 py-1.5"
                     style={{ backgroundColor: 'var(--card)' }}
                   >
                     <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <span className={`text-xs font-mono font-semibold ${actionColor(entry.action, entry.details)}`}>
+                      <span
+                        className={`text-xs font-mono font-semibold ${actionColor(entry.action, entry.details)}`}
+                      >
                         {entry.action}
                         {entry.panel ? `/${entry.panel}` : ''}
                       </span>
-                      <span className="text-xs font-mono" style={{ color: 'var(--muted-foreground)', fontSize: '10px' }}>
+                      <span
+                        className="text-xs font-mono"
+                        style={{ color: 'var(--muted-foreground)', fontSize: '10px' }}
+                      >
                         {formatTime(entry.created_at)}
                       </span>
                     </div>
-                    <p className="truncate" style={{ color: 'var(--muted-foreground)', fontSize: '10px' }}>
+                    <p
+                      className="truncate"
+                      style={{ color: 'var(--muted-foreground)', fontSize: '10px' }}
+                    >
                       {entry.user_email}
                       {entry.details?.status ? ` · ${entry.details.status}` : ''}
                     </p>

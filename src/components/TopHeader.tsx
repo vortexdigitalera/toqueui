@@ -7,19 +7,23 @@ import { useAuditMetrics } from '@/hooks/useAuditMetrics';
 
 interface TopHeaderProps {
   sidebarCollapsed: boolean;
+  onMobileMenu?: () => void;
 }
 
-export default function TopHeader({ sidebarCollapsed: _ }: TopHeaderProps) {
+export default function TopHeader({ sidebarCollapsed: _, onMobileMenu }: TopHeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const [baseUrl, setBaseUrl] = useState('https://toque.vortex.name.ng');
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('disconnected');
+  const [connectionStatus, setConnectionStatus] = useState<
+    'connected' | 'disconnected' | 'checking'
+  >('disconnected');
   const [lastChecked, setLastChecked] = useState('');
   const metrics = useAuditMetrics();
 
   useEffect(() => {
     const stored = localStorage.getItem('toque_base_url');
     if (stored) setBaseUrl(stored);
-    const storedStatus = localStorage.getItem('toque_connection_status') as typeof connectionStatus | null;
+    const storedStatus = localStorage.getItem('toque_connection_status') as
+      typeof connectionStatus | null;
     if (storedStatus) setConnectionStatus(storedStatus);
     setLastChecked(new Date().toLocaleTimeString('en-US', { hour12: false }));
   }, []);
@@ -36,31 +40,45 @@ export default function TopHeader({ sidebarCollapsed: _ }: TopHeaderProps) {
     metrics.successRate === null
       ? 'var(--muted-foreground)'
       : metrics.successRate >= 90
-      ? 'var(--success)'
-      : metrics.successRate >= 70
-      ? 'var(--warning)'
-      : 'var(--destructive)';
+        ? 'var(--success)'
+        : metrics.successRate >= 70
+          ? 'var(--warning)'
+          : 'var(--destructive)';
 
   return (
     <header
       className="flex items-center justify-between h-14 px-6 shrink-0 gap-4"
       style={{ backgroundColor: 'var(--card)', borderBottom: '1px solid var(--border)' }}
     >
-      {/* Left: base URL */}
+      {/* Left: mobile menu + base URL */}
       <div className="flex items-center gap-3 min-w-0">
+        <button
+          onClick={onMobileMenu}
+          className="btn-ghost p-1.5 rounded-md shrink-0 md:hidden"
+          aria-label="Open menu"
+        >
+          <Icon name="Bars3Icon" size={18} />
+        </button>
         <div
           className="flex items-center gap-2 px-3 py-1.5 rounded font-mono text-xs"
-          style={{ backgroundColor: 'var(--input)', border: '1px solid var(--border)', color: 'var(--muted-foreground)' }}
+          style={{
+            backgroundColor: 'var(--input)',
+            border: '1px solid var(--border)',
+            color: 'var(--muted-foreground)',
+          }}
         >
           <Icon name="GlobeAltIcon" size={13} />
-          <span className="truncate max-w-[220px]" style={{ color: 'var(--foreground)' }}>
+          <span
+            className="truncate max-w-[140px] sm:max-w-[220px]"
+            style={{ color: 'var(--foreground)' }}
+          >
             {baseUrl}
           </span>
         </div>
       </div>
 
-      {/* Center: real-time audit metrics */}
-      <div className="flex items-center gap-3 flex-shrink-0">
+      {/* Center: real-time audit metrics (hidden on small screens to prevent overflow) */}
+      <div className="hidden md:flex items-center gap-3 flex-shrink-0">
         {/* Success Rate */}
         <div
           className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono"
@@ -70,7 +88,11 @@ export default function TopHeader({ sidebarCollapsed: _ }: TopHeaderProps) {
           <Icon name="CheckCircleIcon" size={12} style={{ color: successRateColor }} />
           <span style={{ color: 'var(--muted-foreground)' }}>SR</span>
           <span className="font-semibold" style={{ color: successRateColor }}>
-            {metrics.isLoading ? '—' : metrics.successRate === null ? 'N/A' : `${metrics.successRate}%`}
+            {metrics.isLoading
+              ? '—'
+              : metrics.successRate === null
+                ? 'N/A'
+                : `${metrics.successRate}%`}
           </span>
         </div>
 
@@ -83,7 +105,9 @@ export default function TopHeader({ sidebarCollapsed: _ }: TopHeaderProps) {
           <Icon
             name="ExclamationCircleIcon"
             size={12}
-            style={{ color: metrics.errorCount > 0 ? 'var(--destructive)' : 'var(--muted-foreground)' }}
+            style={{
+              color: metrics.errorCount > 0 ? 'var(--destructive)' : 'var(--muted-foreground)',
+            }}
           />
           <span style={{ color: 'var(--muted-foreground)' }}>ERR</span>
           <span
@@ -111,7 +135,10 @@ export default function TopHeader({ sidebarCollapsed: _ }: TopHeaderProps) {
       {/* Right: status + timestamp + theme toggle */}
       <div className="flex items-center gap-4">
         {lastChecked && (
-          <span className="text-xs font-mono" style={{ color: 'var(--muted-foreground)' }}>
+          <span
+            className="hidden lg:inline text-xs font-mono"
+            style={{ color: 'var(--muted-foreground)' }}
+          >
             Checked {lastChecked}
           </span>
         )}
@@ -126,7 +153,11 @@ export default function TopHeader({ sidebarCollapsed: _ }: TopHeaderProps) {
         </div>
         <div
           className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono"
-          style={{ backgroundColor: 'var(--muted)', color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}
+          style={{
+            backgroundColor: 'var(--muted)',
+            color: 'var(--muted-foreground)',
+            border: '1px solid var(--border)',
+          }}
         >
           <Icon name="KeyIcon" size={12} />
           <span>API Key</span>
