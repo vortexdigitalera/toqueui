@@ -140,7 +140,7 @@ export default function LoginPage() {
       // In production: call your backend to get a WebAuthn challenge, then:
       // const credential = await navigator.credentials.get({ publicKey: challenge });
       // then verify with supabase edge function / backend
-      await new Promise(r => setTimeout(r, 1400));
+      await new Promise((r) => setTimeout(r, 1400));
       setSuccessMsg('Passkey verified — redirecting…');
       setTimeout(() => router.push('/dashboard'), 800);
     } catch (err: any) {
@@ -218,14 +218,20 @@ export default function LoginPage() {
           {/* Tab bar */}
           <div
             className="flex"
-            style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'var(--background)' }}
+            style={{
+              borderBottom: '1px solid var(--border)',
+              backgroundColor: 'var(--background)',
+            }}
           >
             {tabs.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  onClick={() => { setActiveTab(tab.id); clearMessages(); }}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    clearMessages();
+                  }}
                   className="flex-1 flex flex-col items-center gap-0.5 py-3.5 px-2 transition-all duration-150 relative"
                   style={{
                     color: isActive ? 'var(--accent)' : 'var(--muted-foreground)',
@@ -240,7 +246,10 @@ export default function LoginPage() {
                   )}
                   <Icon name={tab.icon as any} size={16} variant={isActive ? 'solid' : 'outline'} />
                   <span className="text-xs font-semibold">{tab.label}</span>
-                  <span className="text-2xs" style={{ fontSize: '10px', color: 'var(--muted-foreground)' }}>
+                  <span
+                    className="text-2xs"
+                    style={{ fontSize: '10px', color: 'var(--muted-foreground)' }}
+                  >
                     {tab.desc}
                   </span>
                 </button>
@@ -282,18 +291,25 @@ export default function LoginPage() {
             {activeTab === 'password' && (
               <form onSubmit={handlePasswordSignIn} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)' }}>
+                  <label
+                    className="block text-xs font-medium mb-1.5"
+                    style={{ color: 'var(--muted-foreground)' }}
+                  >
                     Email address
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <Icon name="EnvelopeIcon" size={14} style={{ color: 'var(--muted-foreground)' }} />
+                      <Icon
+                        name="EnvelopeIcon"
+                        size={14}
+                        style={{ color: 'var(--muted-foreground)' }}
+                      />
                     </span>
                     <input
                       type="email"
                       autoComplete="email"
                       value={email}
-                      onChange={e => setEmail(e.target.value)}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="operator@organisation.com"
                       className="input-field w-full pl-9 pr-3 py-2.5 text-sm"
                     />
@@ -302,7 +318,10 @@ export default function LoginPage() {
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>
+                    <label
+                      className="text-xs font-medium"
+                      style={{ color: 'var(--muted-foreground)' }}
+                    >
                       Password
                     </label>
                     <button
@@ -316,19 +335,23 @@ export default function LoginPage() {
                   </div>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <Icon name="LockClosedIcon" size={14} style={{ color: 'var(--muted-foreground)' }} />
+                      <Icon
+                        name="LockClosedIcon"
+                        size={14}
+                        style={{ color: 'var(--muted-foreground)' }}
+                      />
                     </span>
                     <input
                       type={showPassword ? 'text' : 'password'}
                       autoComplete="current-password"
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••••"
                       className="input-field w-full pl-9 pr-10 py-2.5 text-sm"
                     />
                     <button
                       type="button"
-                      onClick={() => setShowPassword(v => !v)}
+                      onClick={() => setShowPassword((v) => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
                       style={{ color: 'var(--muted-foreground)' }}
                     >
@@ -340,7 +363,7 @@ export default function LoginPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setRememberMe(v => !v)}
+                    onClick={() => setRememberMe((v) => !v)}
                     className="w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all"
                     style={{
                       backgroundColor: rememberMe ? 'var(--primary)' : 'var(--input)',
@@ -375,7 +398,9 @@ export default function LoginPage() {
                 {/* Divider */}
                 <div className="flex items-center gap-3 my-1">
                   <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border)' }} />
-                  <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>or continue with</span>
+                  <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                    or continue with
+                  </span>
                   <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border)' }} />
                 </div>
 
@@ -384,7 +409,7 @@ export default function LoginPage() {
                   {[
                     { id: 'google', label: 'Google', icon: 'GlobeAltIcon' },
                     { id: 'microsoft', label: 'Microsoft', icon: 'BuildingOfficeIcon' },
-                  ].map(p => (
+                  ].map((p) => (
                     <button
                       key={p.id}
                       type="button"
@@ -404,17 +429,24 @@ export default function LoginPage() {
             {activeTab === 'sso' && (
               <div className="space-y-5">
                 <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)' }}>
+                  <label
+                    className="block text-xs font-medium mb-1.5"
+                    style={{ color: 'var(--muted-foreground)' }}
+                  >
                     Organisation domain
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <Icon name="BuildingOffice2Icon" size={14} style={{ color: 'var(--muted-foreground)' }} />
+                      <Icon
+                        name="BuildingOffice2Icon"
+                        size={14}
+                        style={{ color: 'var(--muted-foreground)' }}
+                      />
                     </span>
                     <input
                       type="text"
                       value={ssoDomain}
-                      onChange={e => setSsoDomain(e.target.value)}
+                      onChange={(e) => setSsoDomain(e.target.value)}
                       placeholder="yourcompany.com"
                       className="input-field w-full pl-9 pr-3 py-2.5 text-sm font-mono"
                     />
@@ -425,7 +457,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className="space-y-2">
-                  {SSO_PROVIDERS.map(provider => {
+                  {SSO_PROVIDERS.map((provider) => {
                     const isSelected = selectedProvider === provider.id;
                     return (
                       <button
@@ -441,20 +473,34 @@ export default function LoginPage() {
                       >
                         <span
                           className="w-8 h-8 rounded-md flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: `${provider.color}18`, border: `1px solid ${provider.color}30` }}
+                          style={{
+                            backgroundColor: `${provider.color}18`,
+                            border: `1px solid ${provider.color}30`,
+                          }}
                         >
-                          <Icon name={provider.icon as any} size={16} style={{ color: provider.color }} />
+                          <Icon
+                            name={provider.icon as any}
+                            size={16}
+                            style={{ color: provider.color }}
+                          />
                         </span>
                         <span className="flex-1">
                           <span className="block text-sm font-medium">{provider.label}</span>
-                          <span className="block text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
+                          <span
+                            className="block text-xs mt-0.5"
+                            style={{ color: 'var(--muted-foreground)' }}
+                          >
                             {provider.id === 'saml' ? 'Requires domain above' : 'OAuth 2.0 / OIDC'}
                           </span>
                         </span>
                         {loading && isSelected ? (
                           <span className="w-4 h-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin shrink-0" />
                         ) : (
-                          <Icon name="ChevronRightIcon" size={14} style={{ color: 'var(--muted-foreground)' }} />
+                          <Icon
+                            name="ChevronRightIcon"
+                            size={14}
+                            style={{ color: 'var(--muted-foreground)' }}
+                          />
                         )}
                       </button>
                     );
@@ -469,9 +515,15 @@ export default function LoginPage() {
                     color: 'var(--muted-foreground)',
                   }}
                 >
-                  <Icon name="InformationCircleIcon" size={13} className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
+                  <Icon
+                    name="InformationCircleIcon"
+                    size={13}
+                    className="shrink-0 mt-0.5"
+                    style={{ color: 'var(--accent)' }}
+                  />
                   <span>
-                    SSO requires your organisation to have a configured IdP. Contact your IT admin if you're unsure which provider to use.
+                    SSO requires your organisation to have a configured IdP. Contact your IT admin
+                    if you're unsure which provider to use.
                   </span>
                 </div>
               </div>
@@ -485,13 +537,17 @@ export default function LoginPage() {
                   <div
                     className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-mono"
                     style={{
-                      backgroundColor: passkeySupported ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+                      backgroundColor: passkeySupported
+                        ? 'rgba(34,197,94,0.08)'
+                        : 'rgba(239,68,68,0.08)',
                       border: `1px solid ${passkeySupported ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
                       color: passkeySupported ? 'var(--success)' : 'var(--error)',
                     }}
                   >
                     <Icon name={passkeySupported ? 'CheckCircleIcon' : 'XCircleIcon'} size={13} />
-                    {passkeySupported ? 'WebAuthn / FIDO2 supported in this browser' : 'WebAuthn not supported — use a modern browser'}
+                    {passkeySupported
+                      ? 'WebAuthn / FIDO2 supported in this browser'
+                      : 'WebAuthn not supported — use a modern browser'}
                   </div>
                 )}
 
@@ -512,27 +568,40 @@ export default function LoginPage() {
                       style={{ backgroundColor: 'var(--primary)' }}
                     />
                   </div>
-                  <p className="text-sm font-medium text-center" style={{ color: 'var(--foreground)' }}>
+                  <p
+                    className="text-sm font-medium text-center"
+                    style={{ color: 'var(--foreground)' }}
+                  >
                     Authenticate with your device
                   </p>
-                  <p className="text-xs text-center mt-1" style={{ color: 'var(--muted-foreground)' }}>
+                  <p
+                    className="text-xs text-center mt-1"
+                    style={{ color: 'var(--muted-foreground)' }}
+                  >
                     Use Face ID, Touch ID, Windows Hello, or a hardware security key
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)' }}>
+                  <label
+                    className="block text-xs font-medium mb-1.5"
+                    style={{ color: 'var(--muted-foreground)' }}
+                  >
                     Email address
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <Icon name="EnvelopeIcon" size={14} style={{ color: 'var(--muted-foreground)' }} />
+                      <Icon
+                        name="EnvelopeIcon"
+                        size={14}
+                        style={{ color: 'var(--muted-foreground)' }}
+                      />
                     </span>
                     <input
                       type="email"
                       autoComplete="email webauthn"
                       value={passkeyEmail}
-                      onChange={e => setPasskeyEmail(e.target.value)}
+                      onChange={(e) => setPasskeyEmail(e.target.value)}
                       placeholder="operator@organisation.com"
                       className="input-field w-full pl-9 pr-3 py-2.5 text-sm"
                     />
@@ -543,11 +612,7 @@ export default function LoginPage() {
                   onClick={handlePasskeyAuth}
                   disabled={loading || !passkeySupported}
                   className="btn-primary w-full py-3 text-sm font-semibold"
-                  style={
-                    !passkeySupported
-                      ? { opacity: 0.4, cursor: 'not-allowed' }
-                      : {}
-                  }
+                  style={!passkeySupported ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
                 >
                   {loading ? (
                     <>
@@ -567,14 +632,16 @@ export default function LoginPage() {
                     { label: 'Face ID', icon: 'FaceSmileIcon' },
                     { label: 'Touch ID', icon: 'FingerPrintIcon' },
                     { label: 'Security Key', icon: 'KeyIcon' },
-                  ].map(m => (
+                  ].map((m) => (
                     <div
                       key={m.label}
                       className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg"
                       style={{ backgroundColor: 'var(--input)', border: '1px solid var(--border)' }}
                     >
                       <Icon name={m.icon as any} size={18} style={{ color: 'var(--accent)' }} />
-                      <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{m.label}</span>
+                      <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                        {m.label}
+                      </span>
                     </div>
                   ))}
                 </div>

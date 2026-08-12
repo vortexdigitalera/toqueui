@@ -25,7 +25,11 @@ export default function RoleGuard({ panel, children }: RoleGuardProps) {
     }
     if (!hasAccess && !loggedRef.current) {
       loggedRef.current = true;
-      logAudit('panel_access', panel, { status: 'denied', reason: 'insufficient_role', role: userRole });
+      logAudit('panel_access', panel, {
+        status: 'denied',
+        reason: 'insufficient_role',
+        role: userRole,
+      });
     }
     if (hasAccess && !loggedRef.current) {
       loggedRef.current = true;
@@ -38,7 +42,9 @@ export default function RoleGuard({ panel, children }: RoleGuardProps) {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>Checking permissions…</p>
+          <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
+            Checking permissions…
+          </p>
         </div>
       </div>
     );
@@ -57,9 +63,18 @@ export default function RoleGuard({ panel, children }: RoleGuardProps) {
             className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
             style={{ backgroundColor: 'var(--error, #ef4444)20' }}
           >
-            <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            <svg
+              className="w-8 h-8 text-red-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+              />
             </svg>
           </div>
           <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--foreground)' }}>

@@ -14,7 +14,7 @@ const ERROR_ACTIONS = ['error', 'fail', 'denied', 'reject', 'unauthorized', 'for
 
 function isErrorAction(action: string): boolean {
   const lower = action.toLowerCase();
-  return ERROR_ACTIONS.some(keyword => lower.includes(keyword));
+  return ERROR_ACTIONS.some((keyword) => lower.includes(keyword));
 }
 
 export function useAuditMetrics(): AuditMetrics {
@@ -33,16 +33,14 @@ export function useAuditMetrics(): AuditMetrics {
     const fiveMinutesAgo = now - 5 * 60 * 1000;
     const oneMinuteAgo = now - 60 * 1000;
 
-    const recentLogs = logs.filter(
-      l => new Date(l.created_at).getTime() >= fiveMinutesAgo
-    );
+    const recentLogs = logs.filter((l) => new Date(l.created_at).getTime() >= fiveMinutesAgo);
 
     const total = recentLogs.length;
-    const errors = recentLogs.filter(l => isErrorAction(l.action)).length;
+    const errors = recentLogs.filter((l) => isErrorAction(l.action)).length;
     const successes = total - errors;
 
     const lastMinuteLogs = recentLogs.filter(
-      l => new Date(l.created_at).getTime() >= oneMinuteAgo
+      (l) => new Date(l.created_at).getTime() >= oneMinuteAgo
     );
 
     setMetrics({
@@ -73,7 +71,7 @@ export function useAuditMetrics(): AuditMetrics {
         logsRef.current = data;
         computeMetrics(data);
       } else {
-        setMetrics(prev => ({ ...prev, isLoading: false }));
+        setMetrics((prev) => ({ ...prev, isLoading: false }));
       }
     };
 
@@ -92,9 +90,7 @@ export function useAuditMetrics(): AuditMetrics {
           const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
           logsRef.current = [
             newLog,
-            ...logsRef.current.filter(
-              l => new Date(l.created_at).getTime() >= fiveMinutesAgo
-            ),
+            ...logsRef.current.filter((l) => new Date(l.created_at).getTime() >= fiveMinutesAgo),
           ];
           computeMetrics(logsRef.current);
         }
