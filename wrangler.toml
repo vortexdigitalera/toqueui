@@ -1,7 +1,10 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Toque UI — Cloudflare Pages Config
-# Deploy: wrangler pages deploy .next/standalone --project-name toqueui
-# Or via Cloudflare Pages dashboard: Build command = next build, Output = .next
+# Auto-deploy on push: see .github/workflows/cloudflare-deploy.yml (uses npx wrangler)
+# Manual deploy:  pnpm run deploy:cf        (needs CLOUDFLARE_API_TOKEN env var)
+#                 pnpm run deploy:cf:preview (staging branch)
+# CI deploys use `npx wrangler` — do NOT call bare `wrangler` in the deploy
+# command or Cloudflare's git integration will fail with "wrangler: not found".
 # ═══════════════════════════════════════════════════════════════════════════════
 
 name = "toqueui"
@@ -11,7 +14,8 @@ compatibility_flags = ["nodejs_compat"]
 # ── Pages project output directory ───────────────────────────────────────────
 # NOTE: Do NOT add [assets] directory = ".next" — it includes the webpack cache
 # which exceeds Cloudflare's 25 MiB per-file limit. Use pages_build_output_dir
-# for Cloudflare Pages deployments only.
+# for Cloudflare Pages deployments only. Also avoid a [build] block, which makes
+# Cloudflare run `wrangler deploy` (Workers) instead of `wrangler pages deploy`.
 pages_build_output_dir = ".next"
 
 # ── Public environment variables (safe to commit) ────────────────────────────

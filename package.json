@@ -2,6 +2,10 @@
   "name": "toqueui",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.34.3",
+  "engines": {
+    "node": ">=20"
+  },
   "rocketCritical": {
     "dependencies": [
       "next",
@@ -46,7 +50,10 @@
     "lint:fix": "next lint --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md,json}\"",
     "serve": "next start",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "deploy:cf": "wrangler pages deploy .next --project-name toqueui --branch main --commit-dirty=true",
+    "deploy:cf:preview": "wrangler pages deploy .next --project-name toqueui --branch preview --commit-dirty=true",
+    "deploy:cf:clean": "node -e \"fs.rmSync('.next/cache',{recursive:true,force:true})\" && pnpm run deploy:cf"
   },
   "dependencies": {
     "@dhiwise/component-tagger": "^1.0.16",
