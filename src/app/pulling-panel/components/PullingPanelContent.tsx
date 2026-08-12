@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/AppIcon';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -20,13 +20,50 @@ interface PullJob {
   httpStatus?: number;
 }
 
+const JOBS_KEY = 'toque_pull_jobs';
+const LOG_KEY = 'toque_pull_log';
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+const PULL_CONCURRENCY = 3;
+
+async function runPool<T>(items: T[], worker: (item: T) => Promise<void>, limit: number) {
+  const queue = [...items];
+  const runners = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      if (item !== undefined) await worker(item);
+    }
+  });
+  await Promise.all(runners);
+}
+
 export default function PullingPanelContent() {
-  const [jobs, setJobs] = useState<PullJob[]>([]);
+  const [jobs, setJobs] = useState<PullJob[]>(() => readStored<PullJob[]>(JOBS_KEY, []));
   const [entities, setEntities] = useState<string[]>([]);
   const [selectedEntity, setSelectedEntity] = useState('');
   const [isPulling, setIsPulling] = useState(false);
+  const [pullAllProgress, setPullAllProgress] = useState<{ done: number; total: number } | null>(
+    null
+  );
   const [lastContext, setLastContext] = useState<unknown>(null);
-  const [cliLog, setCliLog] = useState<string[]>([]);
+  const [cliLog, setCliLog] = useState<string[]>(() => readStored<string[]>(LOG_KEY, []));
+  const pendingCountRef = useRef(0);
+
+  useEffect(() => {
+    localStorage.setItem(JOBS_KEY, JSON.stringify(jobs.slice(0, 50)));
+  }, [jobs]);
+
+  useEffect(() => {
+    localStorage.setItem(LOG_KEY, JSON.stringify(cliLog));
+  }, [cliLog]);
 
   useEffect(() => {
     void (async () => {
@@ -48,6 +85,7 @@ export default function PullingPanelContent() {
     const jobId = `pull-${Date.now()}`;
     const startedAt = new Date().toLocaleTimeString('en-US', { hour12: false });
     setJobs((prev) => [{ id: jobId, entityId, status: 'pulling', startedAt }, ...prev]);
+    pendingCountRef.current += 1;
     setIsPulling(true);
     appendLog(`$ toque pull --entity ${entityId} --refresh ${refresh}`);
     appendLog(`→ POST /pull  { activeEntityId: "${entityId}", refresh: ${refresh} } ...`);
@@ -79,6 +117,7 @@ export default function PullingPanelContent() {
       toast.success(`Pull complete — auth + captcha populated for ${entityId}`);
     } else {
       const errMsg = result.error || `HTTP ${result.status}`;
+      const hintLine = result.recoveryHint ? ` · ${result.recoveryHint.title}` : '';
       setJobs((prev) =>
         prev.map((j) =>
           j.id === jobId
@@ -93,17 +132,32 @@ export default function PullingPanelContent() {
             : j
         )
       );
-      appendLog(`✗ POST /pull → ${result.status || 'ERR'}: ${errMsg}`);
+      appendLog(`✗ POST /pull → ${result.status || 'ERR'}: ${errMsg}${hintLine}`);
       toast.error(`Pull failed for ${entityId}: ${errMsg}`);
     }
-    setIsPulling(false);
-    setSelectedEntity('');
+    pendingCountRef.current -= 1;
+    if (pendingCountRef.current <= 0) setIsPulling(false);
   };
 
   const handlePullAll = async () => {
-    for (const en of entities) {
-      await handlePull(en, true);
+    if (!entities.length) {
+      toast.error('No entities loaded — reload the entity list first');
+      return;
     }
+    setIsPulling(true);
+    setPullAllProgress({ done: 0, total: entities.length });
+    let done = 0;
+    await runPool(
+      entities,
+      async (en) => {
+        await handlePull(en, true);
+        done += 1;
+        setPullAllProgress({ done, total: entities.length });
+      },
+      PULL_CONCURRENCY
+    );
+    setPullAllProgress(null);
+    setIsPulling(false);
   };
 
   const statusColor = (s: PullJob['status']) =>
@@ -188,7 +242,10 @@ export default function PullingPanelContent() {
                 disabled={isPulling}
                 className="btn-ghost px-5 py-2 text-sm"
               >
-                <Icon name="ArrowPathIcon" size={14} /> Pull All Entities
+                <Icon name="ArrowPathIcon" size={14} />{' '}
+                {pullAllProgress
+                  ? `Pulling ${pullAllProgress.done}/${pullAllProgress.total}…`
+                  : 'Pull All Entities'}
               </button>
             </div>
           )}

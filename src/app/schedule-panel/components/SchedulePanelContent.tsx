@@ -27,13 +27,20 @@ interface ScheduleFormValues {
   captchaType: string;
 }
 
-const FALLBACK_GROUPS: Group[] = [
-  { id: 'GRP-001', name: 'Hajj Group Alpha 2026' },
-  { id: 'GRP-002', name: 'Umrah Package Delta' },
-  { id: 'GRP-003', name: 'VIP Pilgrimage Group' },
-  { id: 'GRP-004', name: 'Ramadan Umrah Batch 7' },
-  { id: 'GRP-005', name: 'Corporate Hajj Delegation' },
-];
+const FALLBACK_GROUPS: Group[] = [];
+
+const WORKFLOWS_KEY = 'toque_schedule_workflows';
+const GROUP_CACHE_KEY = 'toque_schedule_groups';
+const LOG_KEY = 'toque_schedule_log';
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 const TIME_PRESETS = [
   { label: '06:00', value: '06:00:00.000' },
@@ -54,7 +61,7 @@ function mapStatus(raw: unknown): WorkflowStatus {
     if (s.includes('running') || s.includes('started') || s.includes('queued')) return 'running';
     if (s.includes('pending') || s.includes('waiting')) return 'pending';
   }
-  return 'running';
+  return 'pending';
 }
 
 function formatTimestamp(iso: string) {
@@ -69,8 +76,12 @@ function formatTimestamp(iso: string) {
 }
 
 export default function SchedulePanelContent() {
-  const [workflows, setWorkflows] = useState<ScheduledWorkflow[]>([]);
-  const [groups, setGroups] = useState<Group[]>(FALLBACK_GROUPS);
+  const [workflows, setWorkflows] = useState<ScheduledWorkflow[]>(() =>
+    readStored<ScheduledWorkflow[]>(WORKFLOWS_KEY, [])
+  );
+  const [groups, setGroups] = useState<Group[]>(() =>
+    readStored<Group[]>(GROUP_CACHE_KEY, FALLBACK_GROUPS)
+  );
   const [pullBefore, setPullBefore] = useState(true);
   const [captcha, setCaptcha] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -88,7 +99,7 @@ export default function SchedulePanelContent() {
   const [statusFilter, setStatusFilter] = useState<WorkflowStatus | 'all'>('all');
   const [mounted, setMounted] = useState(false);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
-  const [cliLog, setCliLog] = useState<string[]>([]);
+  const [cliLog, setCliLog] = useState<string[]>(() => readStored<string[]>(LOG_KEY, []));
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [countdown, setCountdown] = useState<string>('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -96,6 +107,18 @@ export default function SchedulePanelContent() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(WORKFLOWS_KEY, JSON.stringify(workflows.slice(0, 100)));
+  }, [workflows]);
+
+  useEffect(() => {
+    if (groups.length) localStorage.setItem(GROUP_CACHE_KEY, JSON.stringify(groups));
+  }, [groups]);
+
+  useEffect(() => {
+    localStorage.setItem(LOG_KEY, JSON.stringify(cliLog));
+  }, [cliLog]);
 
   const appendLog = (line: string) => setCliLog((prev) => [...prev.slice(-99), line]);
 
@@ -153,17 +176,23 @@ export default function SchedulePanelContent() {
   }, [workflows, mounted]);
 
   const handleRefreshWorkflows = useCallback(async () => {
+    if (!workflows.length) {
+      toast.info('No workflows to poll — create a scheduled send first');
+      return;
+    }
     const active = workflows.filter((w) => w.status === 'pending' || w.status === 'running');
-    if (!active.length) return;
+    const targets = active.length ? active : workflows.slice(0, 5);
     setIsRefreshing(true);
-    appendLog(`$ toque schedule status ×${active.length}`);
+    appendLog(`$ toque schedule status ×${targets.length}`);
     await Promise.all(
-      active.map(async (wf) => {
+      targets.map(async (wf) => {
         const r = await toqueScheduleStatus(wf.id);
         if (r.ok && r.data) {
           const st = mapStatus(r.data.status);
           setWorkflows((prev) => prev.map((w) => (w.id === wf.id ? { ...w, status: st } : w)));
           appendLog(`✓ status ${wf.id} → ${st} (${r.latencyMs}ms)`);
+        } else {
+          appendLog(`✗ status ${wf.id} → ${r.status || 'ERR'}: ${r.error}`);
         }
       })
     );
@@ -240,7 +269,10 @@ export default function SchedulePanelContent() {
       setCaptcha(true);
     } else {
       const errMsg = result.error || `HTTP ${result.status}`;
-      setCreateError(`POST /schedule/workflow → ${result.status || 'ERR'}: ${errMsg}`);
+      const hintLine = result.recoveryHint
+        ? `\n${result.recoveryHint.title} — ${result.recoveryHint.hint}${result.recoveryHint.action ? `\n→ ${result.recoveryHint.action}` : ''}`
+        : '';
+      setCreateError(`POST /schedule/workflow → ${result.status || 'ERR'}: ${errMsg}${hintLine}`);
       appendLog(`✗ POST /schedule/workflow → ${result.status || 'ERR'}: ${errMsg}`);
       toast.error('Workflow creation failed: ' + errMsg);
     }
@@ -760,7 +792,8 @@ export default function SchedulePanelContent() {
                             No {statusFilter !== 'all' ? statusFilter : ''} workflows
                           </p>
                           <p className="mt-1 text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                            Create a scheduled send using the form — instances are tracked locally
+                            Create a scheduled send using the form — instances persist in this
+                            browser
                           </p>
                         </div>
                       </td>

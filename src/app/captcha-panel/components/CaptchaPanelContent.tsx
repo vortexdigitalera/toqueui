@@ -110,14 +110,38 @@ const SET_PRESETS = [
 
 function parseKv(raw: string): Record<string, string> {
   const out: Record<string, string> = {};
-  raw
-    .trim()
-    .split(/\s+/)
-    .forEach((pair) => {
-      const [k, v] = pair.split('=');
-      if (k && v !== undefined) out[k] = v;
-    });
+  const tokens = raw.trim().split(/\s+/).filter(Boolean);
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    if (tok.includes('=')) {
+      const [k, v] = tok.split('=');
+      if (k && v !== undefined) out[k.replace(/^--?/, '')] = v;
+      continue;
+    }
+    if (tok.startsWith('-')) {
+      const key = tok.replace(/^--?/, '');
+      const next = tokens[i + 1];
+      if (next && !next.startsWith('-') && !next.includes('=')) {
+        out[key] = next;
+        i++;
+      } else {
+        out[key] = 'true';
+      }
+    }
+  }
   return out;
+}
+
+const HISTORY_KEY = 'toque_captcha_history';
+const LOG_KEY = 'toque_captcha_log';
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function dataToLines(data: unknown): string[] {
@@ -148,8 +172,10 @@ function dataToLines(data: unknown): string[] {
 export default function CaptchaPanelContent() {
   const [selectedOp, setSelectedOp] = useState<CaptchaOp>('status');
   const [params, setParams] = useState('');
-  const [logs, setLogs] = useState<CommandLog[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [logs, setLogs] = useState<CommandLog[]>(() => readStored<CommandLog[]>(LOG_KEY, []));
+  const [history, setHistory] = useState<HistoryEntry[]>(() =>
+    readStored<HistoryEntry[]>(HISTORY_KEY, [])
+  );
   const [isRunning, setIsRunning] = useState(false);
   const [activeTab, setActiveTab] = useState<'terminal' | 'history'>('terminal');
   const terminalRef = useRef<HTMLDivElement>(null);
@@ -157,6 +183,14 @@ export default function CaptchaPanelContent() {
   useEffect(() => {
     if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
   }, [logs]);
+
+  useEffect(() => {
+    localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(-50)));
+  }, [logs]);
+
+  useEffect(() => {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 50)));
+  }, [history]);
 
   const runOperation = async () => {
     if (isRunning) return;
@@ -239,6 +273,11 @@ export default function CaptchaPanelContent() {
       toast.success(`${OP_META[selectedOp].label} completed in ${result.latencyMs}ms`);
     } else {
       outputLines.push(`✗ ${httpEndpoint} → ${result.status || 'ERR'}: ${result.error}`);
+      if (result.recoveryHint) {
+        outputLines.push(`⚑ [${result.failureCategory}] ${result.recoveryHint.title}`);
+        outputLines.push(`  → ${result.recoveryHint.hint}`);
+        if (result.recoveryHint.action) outputLines.push(`  → ${result.recoveryHint.action}`);
+      }
       toast.error(`${OP_META[selectedOp].label} failed: ${result.error}`);
     }
 

@@ -38,13 +38,21 @@ interface SendHistoryEntry {
   cliCommand?: string;
 }
 
-const FALLBACK_GROUPS: Group[] = [
-  { id: 'GRP-001', name: 'Hajj Group Alpha 2026' },
-  { id: 'GRP-002', name: 'Umrah Package Delta' },
-  { id: 'GRP-003', name: 'VIP Pilgrimage Group' },
-  { id: 'GRP-004', name: 'Ramadan Umrah Batch 7' },
-  { id: 'GRP-005', name: 'Corporate Hajj Delegation' },
-];
+const FALLBACK_GROUPS: Group[] = [];
+
+const HISTORY_KEY = 'toque_send_history';
+const LOG_KEY = 'toque_send_log';
+const AUTH_READY_KEY = 'toque_auth_ready';
+const GROUP_CACHE_KEY = 'toque_groups_cache';
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 function formatTimestamp(iso: string) {
   const d = new Date(iso);
@@ -63,18 +71,38 @@ export default function SendVisaPanelContent() {
   const [sendResponse, setSendResponse] = useState<SendVisaResponse | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendLatency, setSendLatency] = useState<number | null>(null);
-  const [history, setHistory] = useState<SendHistoryEntry[]>([]);
+  const [history, setHistory] = useState<SendHistoryEntry[]>(() =>
+    readStored<SendHistoryEntry[]>(HISTORY_KEY, [])
+  );
   const [selectedGroup, setSelectedGroup] = useState<string>('');
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
-  const [groups, setGroups] = useState<Group[]>(FALLBACK_GROUPS);
-  const [cliLog, setCliLog] = useState<string[]>([]);
+  const [groups, setGroups] = useState<Group[]>(() =>
+    readStored<Group[]>(GROUP_CACHE_KEY, FALLBACK_GROUPS)
+  );
+  const [cliLog, setCliLog] = useState<string[]>(() => readStored<string[]>(LOG_KEY, []));
 
   // Pull-credentials gate
   const [entities, setEntities] = useState<string[]>([]);
   const [entityId, setEntityId] = useState('');
   const [isPulling, setIsPulling] = useState(false);
-  const [authReady, setAuthReady] = useState(false);
+  const [authReady, setAuthReady] = useState(() => localStorage.getItem(AUTH_READY_KEY) === '1');
+
+  useEffect(() => {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 50)));
+  }, [history]);
+
+  useEffect(() => {
+    localStorage.setItem(LOG_KEY, JSON.stringify(cliLog));
+  }, [cliLog]);
+
+  useEffect(() => {
+    localStorage.setItem(AUTH_READY_KEY, authReady ? '1' : '0');
+  }, [authReady]);
+
+  useEffect(() => {
+    if (groups.length) localStorage.setItem(GROUP_CACHE_KEY, JSON.stringify(groups));
+  }, [groups]);
 
   const {
     register,
@@ -130,10 +158,15 @@ export default function SendVisaPanelContent() {
       );
       toast.success(`${result.data.groups.length} groups loaded`);
     } else {
+      const hintLine = result.recoveryHint ? ` · ${result.recoveryHint.title}` : '';
       appendLog(
-        `✗ POST /groups → ${result.status || 'ERR'}: ${result.error || 'No groups'} — using cached list`
+        `✗ POST /groups → ${result.status || 'ERR'}: ${result.error || 'No groups'}${hintLine}`
       );
-      toast.error('Could not load groups — using cached list');
+      if (groups.length) {
+        toast.error('Could not refresh groups — using cached list');
+      } else {
+        toast.error('Could not load groups — enter a Group ID manually');
+      }
     }
     setIsLoadingGroups(false);
   };
@@ -212,7 +245,10 @@ export default function SendVisaPanelContent() {
         toast.success(`Visa send submitted — HTTP ${result.status} in ${result.latencyMs}ms`);
       } else {
         const errMsg = result.error || `HTTP ${result.status}`;
-        setSendError(`POST /send → ${result.status || 'ERR'}: ${errMsg}`);
+        const hintLine = result.recoveryHint
+          ? `\n${result.recoveryHint.title} — ${result.recoveryHint.hint}${result.recoveryHint.action ? `\n→ ${result.recoveryHint.action}` : ''}`
+          : '';
+        setSendError(`POST /send → ${result.status || 'ERR'}: ${errMsg}${hintLine}`);
         setHistory((prev) =>
           prev.map((e) =>
             e.id === pendingId
