@@ -1,6 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Toque UI — Cloudflare Pages Config
-# Deploy: wrangler pages deploy .next --project-name toqueui
+# Deploy: wrangler pages deploy .next/standalone --project-name toqueui
+# Or via Cloudflare Pages dashboard: Build command = next build, Output = .next
 # ═══════════════════════════════════════════════════════════════════════════════
 
 name = "toqueui"
@@ -8,11 +9,10 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
 # ── Pages project output directory ───────────────────────────────────────────
+# NOTE: Do NOT add [assets] directory = ".next" — it includes the webpack cache
+# which exceeds Cloudflare's 25 MiB per-file limit. Use pages_build_output_dir
+# for Cloudflare Pages deployments only.
 pages_build_output_dir = ".next"
-
-# ── Assets directory (required so `wrangler deploy` doesn't error) ───────────
-[assets]
-directory = ".next"
 
 # ── Public environment variables (safe to commit) ────────────────────────────
 [vars]
