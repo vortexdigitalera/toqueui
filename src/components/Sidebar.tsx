@@ -5,7 +5,7 @@ import Link from 'next/link';
 import AppLogo from './ui/AppLogo';
 import Icon from './ui/AppIcon';
 import { useAuth } from '@/contexts/AuthContext';
-import { canAccessPanel, ROLE_LABELS, ROLE_COLORS, type Panel } from '@/lib/rbac';
+import { canAccessPanel, ROLE_LABELS, ROLE_COLORS, type Panel, type UserRole } from '@/lib/rbac';
 import { createClient } from '@/lib/supabase/client';
 
 interface NavItem {
@@ -113,7 +113,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ collapsed, onToggle, activeRoute, onNavigate }: SidebarProps) {
-  const { userRole } = useAuth();
+  const { userRole } = useAuth() as { userRole: UserRole | null };
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
