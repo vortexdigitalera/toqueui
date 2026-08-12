@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Toque UI — Cloudflare Pages Config
-# Deploy: npx wrangler pages deploy .next --project-name toqueui
+# Deploy: wrangler pages deploy .next --project-name toqueui
 # ═══════════════════════════════════════════════════════════════════════════════
 
 name = "toqueui"
@@ -9,6 +9,10 @@ compatibility_flags = ["nodejs_compat"]
 
 # ── Pages project output directory ───────────────────────────────────────────
 pages_build_output_dir = ".next"
+
+# ── Assets directory (required so `wrangler deploy` doesn't error) ───────────
+[assets]
+directory = ".next"
 
 # ── Public environment variables (safe to commit) ────────────────────────────
 [vars]
